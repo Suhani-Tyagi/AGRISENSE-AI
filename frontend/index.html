@@ -6,9 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>AgriSense AI - Empowering Smallholder Farmers</title>
     <meta name="description" content="AI-powered farming dashboard, crop disease detection, soil moisture monitoring, regional mandi fair-price marketplace, and alt-data credit score." />
+    <link rel="manifest" href="/manifest.json" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('PWA ServiceWorker registered successfully:', reg.scope))
+            .catch((err) => console.warn('PWA ServiceWorker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

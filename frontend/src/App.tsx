@@ -13,12 +13,30 @@ function App() {
   // Determine API base url dynamically (supports both local development and docker-compose/cloud deploy)
   const [apiBaseUrl, setApiBaseUrl] = useState('http://localhost:8000');
 
+  // Persistent in-app notifications
+  const [notifications, setNotifications] = useState<any[]>(() => {
+    const saved = localStorage.getItem('agrisense_notifications');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: 'welcome_notif',
+        title: 'Welcome to AgriSense AI!',
+        desc: 'Explore your farming advisor, track soil telemetry, and connect with crop buyers.',
+        isRead: false,
+        timestamp: Date.now()
+      }
+    ];
+  });
+
   useEffect(() => {
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       // In production or custom domains, point to current origin
       setApiBaseUrl(window.location.origin);
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('agrisense_notifications', JSON.stringify(notifications));
+  }, [notifications]);
 
   const handleLogin = (authToken: string, userRole: string, userName: string, id: number) => {
     localStorage.setItem('agrisense_token', authToken);
@@ -48,12 +66,25 @@ function App() {
     setUserId(0);
   };
 
+  const handleMarkRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === id ? { ...n, isRead: true } : n))
+    );
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
   return (
     <Layout
       activeRole={role}
       onRoleChange={handleRoleChange}
       onLogout={handleLogout}
       userName={name || undefined}
+      notifications={notifications}
+      onMarkNotificationRead={handleMarkRead}
+      onMarkAllNotificationsRead={handleMarkAllRead}
     >
       {token ? (
         <Dashboard
@@ -61,6 +92,8 @@ function App() {
           role={role}
           userId={userId}
           apiBaseUrl={apiBaseUrl}
+          notifications={notifications}
+          setNotifications={setNotifications}
         />
       ) : (
         <Auth

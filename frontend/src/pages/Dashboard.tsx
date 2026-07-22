@@ -4,22 +4,25 @@ import axios from 'axios';
 import {
   Droplets, Activity, FileText, PlusCircle,
   AlertCircle, Upload, Coins, Search, Award, TrendingUp,
-  XCircle, Info, Calendar, MapPin, Loader2, Sparkles, Check
+  XCircle, Info, Calendar, MapPin, Loader2, Sparkles, Check, Sprout
 } from 'lucide-react';
 import { SoilChart } from '../components/SoilChart';
 import { PriceChart } from '../components/PriceChart';
 import { VoiceInput } from '../components/VoiceInput';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { CardSkeleton, ChartSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 
 interface DashboardProps {
   token: string;
   role: string;
   userId: number;
   apiBaseUrl: string;
+  notifications: any[];
+  setNotifications: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBaseUrl }) => {
-  const { t } = useTranslation();
+export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBaseUrl, setNotifications }) => {
+  const { t, i18n } = useTranslation();
 
   const axiosConfig = {
     headers: { Authorization: `Bearer ${token}` }
@@ -29,6 +32,91 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Onboarding tour states
+  const [tourStep, setTourStep] = useState<number | null>(null);
+
+  // Pagination states
+  const [marketPage, setMarketPage] = useState(1);
+  const marketPageSize = 5;
+
+  const TOUR_STEPS: any = {
+    farmer: [
+      {
+        title: "Welcome to AgriSense AI! 👋",
+        title_hi: "कृषि-सेंस एआई में आपका स्वागत है! 👋",
+        desc: "Tap 'Register Field' to add your farmland details and begin real-time soil & weather monitoring.",
+        desc_hi: "अपनी कृषि भूमि का विवरण जोड़ने और रीयल-टाइम मिट्टी और मौसम की निगरानी शुरू करने के लिए 'खेत पंजीकृत करें' पर टैप करें।"
+      },
+      {
+        title: "Weather Alerts & Soil Health 🌾",
+        title_hi: "मौसम अलर्ट और मिट्टी का स्वास्थ्य 🌾",
+        desc: "View customized pesticide spray recommendations based on local forecasts, and check live NPK / pH nutrient telemetry.",
+        desc_hi: "स्थानीय मौसम पूर्वानुमानों के आधार पर अनुकूलित कीटनाशक छिड़काव सलाह देखें, और नाइट्रोजन, फॉस्फोरस, पोटाश का स्तर देखें।"
+      },
+      {
+        title: "Crop Doctor & Marketplace 🛒",
+        title_hi: "फसल चिकित्सक और बाजार 🛒",
+        desc: "Scan crop leaf photos to identify diseases instantly. When harvested, easily list your crops to receive competitive offers from local buyers.",
+        desc_hi: "रोगों की तुरंत पहचान करने के लिए पत्ती की तस्वीरें स्कैन करें। फसल तैयार होने पर खरीदारों से बोलियां प्राप्त करने के लिए अपनी फसल सूचीबद्ध करें।"
+      }
+    ],
+    buyer: [
+      {
+        title: "Welcome to the Market Hub! 📈",
+        title_hi: "बाजार केंद्र में आपका स्वागत है! 📈",
+        desc: "Browse high-quality crop listings added directly by local farmers. Filter by crop name or quality grade.",
+        desc_hi: "स्थानीय किसानों द्वारा सीधे सूचीबद्ध की गई उच्च गुणवत्ता वाली फसलों को ब्राउज़ करें। फसल के नाम या ग्रेड से फ़िल्टर करें।"
+      },
+      {
+        title: "Submit Bids Easily 💬",
+        title_hi: "आसानी से बोलियां लगाएं 💬",
+        desc: "Tap 'Make Offer' on any listing to specify your purchase price and quantity bid directly to the seller.",
+        desc_hi: "विक्रेता को अपनी खरीद मूल्य और मात्रा की पेशकश निर्दिष्ट करने के लिए किसी भी सूची पर 'ऑफर दें' पर टैप करें।"
+      },
+      {
+        title: "Track Bids in Real-Time 🔔",
+        title_hi: "वास्तविक समय में बोलियां ट्रैक करें 🔔",
+        desc: "Monitor placed offers and get notified instantly when farmers accept or reject your purchases.",
+        desc_hi: "लगाई गई बोलियों की निगरानी करें और किसानों द्वारा उन्हें स्वीकार या अस्वीकार किए जाने पर तुरंत सूचना प्राप्त करें।"
+      }
+    ],
+    finance_officer: [
+      {
+        title: "Welcome to Agri-Credit Underwriting! 💳",
+        title_hi: "कृषि-क्रेडिट अंडरराइटिंग में आपका स्वागत है! 💳",
+        desc: "Manage alternative-data credit scoring for local smallholder farmers using real-time farm activities.",
+        desc_hi: "वास्तविक समय की कृषि गतिविधियों का उपयोग करके स्थानीय छोटे किसानों के लिए वैकल्पिक-डेटा क्रेडिट स्कोरिंग का प्रबंधन करें।"
+      },
+      {
+        title: "Explore FarmScores 📊",
+        title_hi: "फार्मस्कोर (FarmScore) देखें 📊",
+        desc: "Analyze score breakdowns based on crop tracking diligence, completed marketplace trades, and simulated credit behaviors.",
+        desc_hi: "फसल स्वास्थ्य जांच, पूर्ण बाजार व्यापार, और सिमुलेटेड क्रेडिट व्यवहार के आधार पर स्कोर विश्लेषण का अध्ययन करें।"
+      },
+      {
+        title: "Unlock Micro-Credit Loans 🔓",
+        title_hi: "माइक्रो-क्रेडिट ऋण अनलॉक करें 🔓",
+        desc: "Approve micro-loans tailored to each farmer's underwriting score and verify risk ratings directly.",
+        desc_hi: "प्रत्येक किसान के अंडरराइटिंग स्कोर के अनुसार ऋण स्वीकृत करें और सीधे जोखिम रेटिंग की पुष्टि करें।"
+      }
+    ]
+  };
+
+  useEffect(() => {
+    // Show onboarding tour only once per role
+    const isTourDone = localStorage.getItem(`agrisense_onboarded_${role}`);
+    if (!isTourDone) {
+      setTourStep(0);
+    } else {
+      setTourStep(null);
+    }
+  }, [role]);
+
+  const handleCompleteTour = () => {
+    localStorage.setItem(`agrisense_onboarded_${role}`, 'true');
+    setTourStep(null);
+  };
 
   // --- FARMER STATES ---
   const [fields, setFields] = useState<any[]>([]);
@@ -141,6 +229,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
       const activeOwned = res.data.filter((l: any) => l.user_id === userId);
       setFarmerListings(activeOwned);
 
+      // Trigger notifications for new pending offers
+      activeOwned.forEach((listing: any) => {
+        if (listing.offers) {
+          listing.offers.forEach((offer: any) => {
+            if (offer.status === 'pending') {
+              setNotifications((prev: any[]) => {
+                const exists = prev.some(n => n.id === `offer_${offer.id}`);
+                if (exists) return prev;
+                return [
+                  {
+                    id: `offer_${offer.id}`,
+                    title: 'New Bid Offer Received! 🪙',
+                    desc: `${offer.buyer_name || 'A buyer'} offered ₹${offer.offered_price_per_kg}/kg for ${offer.quantity_kg}kg of your ${listing.crop}.`,
+                    isRead: false,
+                    timestamp: Date.now()
+                  },
+                  ...prev
+                ];
+              });
+            }
+          });
+        }
+      });
+
       const soldRes = await axios.get(`${apiBaseUrl}/api/marketplace/?status_filter=sold`, axiosConfig);
       const soldOwned = soldRes.data.filter((l: any) => l.user_id === userId);
       setFarmerListings(prev => [...prev, ...soldOwned]);
@@ -173,6 +285,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
     try {
       const res = await axios.get(`${apiBaseUrl}/api/weather/?latitude=${lat}&longitude=${lng}`, axiosConfig);
       setWeather(res.data);
+      if (res.data && res.data.alerts) {
+        res.data.alerts.forEach((alert: any) => {
+          setNotifications((prev: any[]) => {
+            const exists = prev.some(n => n.id === `weather_${alert.id || alert.title}`);
+            if (exists) return prev;
+            return [
+              {
+                id: `weather_${alert.id || alert.title}`,
+                title: `Climate Alert: ${alert.title}`,
+                desc: alert.desc,
+                isRead: false,
+                timestamp: Date.now()
+              },
+              ...prev
+            ];
+          });
+        });
+      }
     } catch (err) {}
   };
 
@@ -406,11 +536,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Loading state with pulsing skeletons */}
       {loading && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="w-10 h-10 text-forest-500 animate-spin mb-4" />
-          <span className="text-sm font-semibold text-earth-500">{t('loading')}</span>
+        <div className="space-y-6">
+          <div className="flex items-center space-x-2 pb-2">
+            <div className="h-6 bg-earth-200 dark:bg-forest-800 rounded w-1/3 animate-pulse"></div>
+          </div>
+          <CardSkeleton />
+          <ChartSkeleton />
+          <ListSkeleton />
         </div>
       )}
 
@@ -623,10 +757,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
 
                   </div>
                 ) : (
-                  <div className="text-center py-6">
-                    <p className="text-xs text-earth-500 mb-3">No fields registered yet. Let's register your first field!</p>
-                    <button onClick={() => setShowRegField(true)} className="btn-primary text-xs py-2 px-4 rounded-xl">
-                      {t('registerField')}
+                  <div className="text-center py-8 bg-earth-50/50 dark:bg-forest-900/10 rounded-2xl border border-dashed border-earth-200 dark:border-forest-800 p-6 flex flex-col items-center space-y-3 transition duration-300 hover:scale-[1.01]">
+                    <MapPin className="w-10 h-10 text-forest-500 animate-bounce" />
+                    <p className="text-xs font-bold text-earth-800 dark:text-forest-200">No farmlands registered yet</p>
+                    <p className="text-[11px] text-earth-450 dark:text-forest-400 max-w-xs leading-normal">
+                      Register your field to connect live IoT sensor feeds and unlock smart fertilizer recommendations.
+                    </p>
+                    <button onClick={() => setShowRegField(true)} className="btn-primary text-xs py-2 px-4 rounded-xl flex items-center space-x-1.5 active:scale-95 transition">
+                      <PlusCircle className="w-4 h-4" />
+                      <span>{t('registerField')}</span>
                     </button>
                   </div>
                 )}
@@ -825,7 +964,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-earth-500 italic text-center py-2">{t('noHistory')}</p>
+                      <div className="text-center py-6 bg-earth-50/50 dark:bg-forest-900/10 rounded-2xl border border-dashed border-earth-200 dark:border-forest-800 p-4 flex flex-col items-center space-y-2">
+                        <Sprout className="w-8 h-8 text-forest-400 animate-pulse" />
+                        <p className="text-xs font-bold text-earth-800 dark:text-forest-200">{t('noHistory')}</p>
+                        <p className="text-[10px] text-earth-450 dark:text-forest-400 max-w-xs leading-normal">
+                          Snap or upload a crop leaf image above to analyze plant diseases instantly.
+                        </p>
+                      </div>
                     )}
                   </div>
 
@@ -1046,7 +1191,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-earth-500 italic text-center py-2">{t('noListings')}</p>
+                      <div className="text-center py-6 bg-earth-50/50 dark:bg-forest-900/10 rounded-2xl border border-dashed border-earth-200 dark:border-forest-800 p-4 flex flex-col items-center space-y-2">
+                        <Coins className="w-8 h-8 text-forest-400 animate-pulse" />
+                        <p className="text-xs font-bold text-earth-800 dark:text-forest-200">{t('noListings')}</p>
+                        <p className="text-[10px] text-earth-450 dark:text-forest-400 max-w-xs leading-normal">
+                          List your harvests above to start receiving fair purchase bids from local buyers.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1207,41 +1358,80 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
 
                   {/* Listings Map-like list */}
                   <div className="space-y-3">
-                    {allListings.length > 0 ? (
-                      allListings
+                    {(() => {
+                      const filtered = allListings
                         .filter(l => !searchCrop || l.crop.toLowerCase().includes(searchCrop.toLowerCase()))
-                        .filter(l => !filterGrade || l.quality_grade === filterGrade)
-                        .map((listing) => (
-                          <div key={listing.id} className="p-4 bg-white dark:bg-forest-900 border border-earth-150 dark:border-forest-800 rounded-2xl shadow-sm space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <span className="text-[10px] text-earth-400 uppercase font-bold">Farmer: {listing.seller_name}</span>
-                                <h4 className="text-sm font-black text-earth-900 dark:text-forest-100 mt-0.5">
-                                  {listing.quantity_kg}kg {listing.crop} (Grade {listing.quality_grade})
-                                </h4>
-                                <span className="text-[10px] text-earth-450 mt-1 flex items-center">
-                                  <MapPin className="w-3.5 h-3.5 mr-1" />
-                                  {listing.location} (Phone: {listing.seller_phone})
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-sm font-black text-forest-700 dark:text-forest-300">₹{listing.price_per_kg}/kg</span>
-                                <span className="text-[9px] text-earth-400 block mt-0.5">Asking Price</span>
-                              </div>
-                            </div>
+                        .filter(l => !filterGrade || l.quality_grade === filterGrade);
+                      const totalPages = Math.ceil(filtered.length / marketPageSize);
+                      const paginated = filtered.slice((marketPage - 1) * marketPageSize, marketPage * marketPageSize);
 
-                            {/* Place bid button */}
-                            <button
-                              onClick={() => handleOpenBidModal(listing)}
-                              className="btn-primary w-full text-xs py-2 px-3 rounded-lg"
-                            >
-                              {t('makeOffer')}
-                            </button>
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="text-center py-8 bg-earth-50/50 dark:bg-forest-900/10 rounded-2xl border border-dashed border-earth-200 dark:border-forest-800 p-6 flex flex-col items-center space-y-3">
+                            <Coins className="w-10 h-10 text-forest-400 animate-pulse" />
+                            <p className="text-xs font-bold text-earth-800 dark:text-forest-200">{t('noListings')}</p>
+                            <p className="text-[11px] text-earth-450 dark:text-forest-400 max-w-xs leading-normal">
+                              There are currently no active crop sales in the marketplace directory. Please check back later.
+                            </p>
                           </div>
-                        ))
-                    ) : (
-                      <p className="text-xs text-earth-500 italic text-center py-4">{t('noListings')}</p>
-                    )}
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {paginated.map((listing) => (
+                            <div key={listing.id} className="p-4 bg-white dark:bg-forest-900 border border-earth-150 dark:border-forest-800 rounded-2xl shadow-sm space-y-3 transition duration-150 hover:scale-[1.01]">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <span className="text-[10px] text-earth-400 uppercase font-bold">Farmer: {listing.seller_name}</span>
+                                  <h4 className="text-sm font-black text-earth-900 dark:text-forest-100 mt-0.5">
+                                    {listing.quantity_kg}kg {listing.crop} (Grade {listing.quality_grade})
+                                  </h4>
+                                  <span className="text-[10px] text-earth-450 mt-1 flex items-center">
+                                    <MapPin className="w-3.5 h-3.5 mr-1" />
+                                    {listing.location} (Phone: {listing.seller_phone})
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-sm font-black text-forest-700 dark:text-forest-300">₹{listing.price_per_kg}/kg</span>
+                                  <span className="text-[9px] text-earth-400 block mt-0.5">Asking Price</span>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => handleOpenBidModal(listing)}
+                                className="btn-primary w-full text-xs py-2 px-3 rounded-lg active:scale-95 transition"
+                              >
+                                {t('makeOffer')}
+                              </button>
+                            </div>
+                          ))}
+
+                          {/* Pagination controls */}
+                          {totalPages > 1 && (
+                            <div className="flex justify-between items-center pt-2 text-xs">
+                              <button
+                                disabled={marketPage === 1}
+                                onClick={() => setMarketPage(p => Math.max(p - 1, 1))}
+                                className="px-3 py-1.5 bg-earth-100 hover:bg-earth-200 dark:bg-forest-800 dark:hover:bg-forest-700 disabled:opacity-50 font-bold rounded-lg transition active:scale-95"
+                              >
+                                Previous
+                              </button>
+                              <span className="text-earth-500 dark:text-forest-300 font-bold">
+                                Page {marketPage} of {totalPages}
+                              </span>
+                              <button
+                                disabled={marketPage === totalPages}
+                                onClick={() => setMarketPage(p => Math.min(p + 1, totalPages))}
+                                className="px-3 py-1.5 bg-earth-100 hover:bg-earth-200 dark:bg-forest-800 dark:hover:bg-forest-700 disabled:opacity-50 font-bold rounded-lg transition active:scale-95"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                 </div>
@@ -1483,6 +1673,61 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
             </div>
           )}
         </>
+      )}
+
+      {/* Onboarding Tour Overlay Modal */}
+      {tourStep !== null && TOUR_STEPS[role] && TOUR_STEPS[role][tourStep] && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-forest-800 border border-earth-200 dark:border-forest-750 max-w-sm w-full rounded-3xl p-6 shadow-2xl space-y-4 text-center transform transition-all duration-300 scale-100">
+            {/* Step Counter */}
+            <div className="flex justify-center items-center space-x-1.5">
+              {[0, 1, 2].map((idx) => (
+                <span
+                  key={idx}
+                  className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                    idx === tourStep ? 'bg-forest-500 w-5' : 'bg-earth-200 dark:bg-forest-700'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-base font-black text-earth-900 dark:text-forest-100">
+                {i18n.language === 'hi' ? TOUR_STEPS[role][tourStep].title_hi : TOUR_STEPS[role][tourStep].title}
+              </h3>
+              <p className="text-xs text-earth-500 dark:text-forest-400 leading-relaxed font-medium">
+                {i18n.language === 'hi' ? TOUR_STEPS[role][tourStep].desc_hi : TOUR_STEPS[role][tourStep].desc}
+              </p>
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCompleteTour}
+                className="btn-secondary text-xs flex-1 py-2 px-3 rounded-lg"
+              >
+                Skip / छोड़ें
+              </button>
+              {tourStep < 2 ? (
+                <button
+                  type="button"
+                  onClick={() => setTourStep(tourStep + 1)}
+                  className="btn-primary text-xs flex-1 py-2 px-3 rounded-lg"
+                >
+                  Next / आगे
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCompleteTour}
+                  className="btn-primary text-xs flex-1 py-2 px-3 rounded-lg"
+                >
+                  Got It! / समझ गए
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
