@@ -17,11 +17,12 @@
       "dest": "api/index.py"
     },
     {
-      "handle": "filesystem"
+      "src": "/(assets/.*|vite.svg|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.webp)",
+      "dest": "frontend/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "frontend/index.html"
     }
   ]
 }
