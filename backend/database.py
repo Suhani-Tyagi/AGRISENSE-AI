@@ -7,7 +7,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./agrisense.db")
 
 # If running on Vercel, copy seeded db to /tmp/ to allow ephemerally writing to it
 if os.getenv("VERCEL") == "1":
-    src_db = "./agrisense.db"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src_db = os.path.join(base_dir, "agrisense.db")
     dest_db = "/tmp/agrisense.db"
     if os.path.exists(src_db) and not os.path.exists(dest_db):
         import shutil
