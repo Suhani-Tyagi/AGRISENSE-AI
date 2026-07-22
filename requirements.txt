@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pyjwt
+requests
+httpx
+python-multipart
+jinja2

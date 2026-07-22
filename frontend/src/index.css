@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-earth-50 text-earth-900 font-sans antialiased transition-colors duration-200;
+  }
+  
+  body.dark {
+    @apply bg-forest-900 text-forest-50;
+  }
+}
+
+/* Custom transitions and interactive elements */
+.btn-primary {
+  @apply bg-forest-500 hover:bg-forest-600 active:bg-forest-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-150 inline-flex items-center justify-center shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base;
+}
+
+.btn-secondary {
+  @apply bg-earth-100 hover:bg-earth-200 active:bg-earth-300 text-earth-900 font-medium py-3 px-6 rounded-xl transition-all duration-150 inline-flex items-center justify-center border border-earth-200 disabled:opacity-50 text-base;
+}
+
+.btn-terracotta {
+  @apply bg-terracotta-500 hover:bg-terracotta-600 active:bg-terracotta-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-150 inline-flex items-center justify-center shadow-md disabled:opacity-50 text-base;
+}
+
+.card-earth {
+  @apply bg-white dark:bg-forest-800 border border-earth-200 dark:border-forest-700 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200;
+}
+
+.input-earth {
+  @apply w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl px-4 py-3 text-earth-900 dark:text-forest-50 focus:outline-none focus:ring-2 focus:ring-forest-500 dark:focus:ring-forest-400 focus:border-transparent text-base;
+}
+
+/* Voice assistant amplitude animation */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1.0); }
+}
+
+.voice-bar {
+  display: inline-block;
+  width: 4px;
+  height: 24px;
+  background-color: #2e7d32;
+  border-radius: 2px;
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.voice-bar:nth-child(2) { animation-delay: 0.1s; }
+.voice-bar:nth-child(3) { animation-delay: 0.2s; }
+.voice-bar:nth-child(4) { animation-delay: 0.3s; }
+.voice-bar:nth-child(5) { animation-delay: 0.4s; }
+.voice-bar:nth-child(6) { animation-delay: 0.5s; }

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agrisense_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////app/agrisense.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./agrisense.db:/app/agrisense.db
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agrisense_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
