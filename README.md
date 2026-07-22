@@ -6,80 +6,57 @@ AgriSense AI is an AI-powered full-stack web application designed for smallholde
 
 ## 🌟 Key Features & Modules
 
-1. **AI Crop Doctor (Disease Detection)**
+1. **AI Crop Doctor (Disease Detection & Explainability)**
    - Farmer uploads leaf photos to diagnose diseases.
    - Live integration with **Gemini 2.5 Flash API** (Structured JSON response).
    - Smart rule-based fallback diagnoses tomatoes, wheat, rice, cotton, and maize leaf diseases if no API key is set.
-   - Provides organic and chemical treatments, estimated costs, and urgency indicators.
+   - Provides organic and chemical treatments, estimated treatment costs, urgency indicators, and plain-language *"What This Means"* explanations.
 
 2. **Smart Soil & Irrigation Advisor**
    - Live visualizations of NPK nutrient levels, soil moisture, and pH levels over 30 or 90 days.
    - Periodic background simulator updates field readings.
-   - Provides actionable agronomical advice: required irrigation volume and specific fertilizer treatments.
+   - Actionable agronomical advice: required irrigation volume and specific fertilizer treatments.
    - "Connect Real Sensor" stub replicates integration with real physical MQTT/IoT brokers.
 
-3. **Climate Risk Alerts**
-   - Connects live to the public **Open-Meteo API** to fetch forecasts using the field's GPS location.
-   - Displays weather alerts (heatwave, frost, storm, flood).
-   - Generates action-oriented advice (e.g., "Good day to spray pesticide" or "Avoid irrigation today — rain expected").
-   - Graceful fallback to synthetic forecast if offline or API limits are hit.
+3. **Satellite/NDVI Vegetation Health Overlay**
+   - Interactive 5x5 satellite canopy map view detailing NDVI health indices (0.0 to 1.0) with color-coded canopy status legends.
+   - View switcher between live soil sensor telemetry, satellite canopy grid maps, and yield forecasts.
 
-4. **Fair-Price Marketplace**
+4. **Crop Yield Prediction**
+   - AI yield forecasting calculating expected harvest tonnage based on soil moisture logs, NPK levels, and diagnosis history.
+   - Displays estimated market valuations (INR) and confidence ratings.
+
+5. **Climate Risk Alerts**
+   - Connects live to the public **Open-Meteo API** to fetch forecasts using the field's GPS location.
+   - Weather alerts (heatwave, frost, storm, flood) and action-oriented guidance.
+
+6. **Fair-Price Marketplace & Price Trend Alerts**
    - Farmers list produce with Grade, Price, and Quantity.
    - Buyers search, filter, and place bidding offers.
-   - **AI Pricing Assistant** provides Mandi price guides, historical charts, and price recommendations.
-   - Integrated offer accept/reject flow that generates transaction logs.
+   - **AI Pricing Assistant** provides Mandi price guides, historical charts, and plain-language recommendations.
+   - **Price Trend Alerts**: Farmers set price watcher thresholds (e.g. "Notify me if Tomato goes above ₹25") triggering in-app alert notifications.
 
-5. **Alt-Data Credit Score (FarmScore)**
-   - Computes a transparent credit score (0-100) based on:
-     - Field data completeness (+10 pts per field, max 20)
-     - Health tracking history (+5 pts per check, max 25)
-     - Marketplace activity (+5 pts per listing, completed sales, max 25)
-     - Simulated loan repayment records (Max 30, defaults incur -10 pt penalty)
-   - Displays clear improvement tips and micro-credit offers.
+7. **Community Q&A Forum**
+   - Discussion forum feed where farmers post questions and receive answers from peers and extension officers.
+   - Filterable by crop type (Tomato, Wheat, Rice, Cotton, Maize) and region.
 
-6. **Unified Dashboard & Role-based Access**
-   - Shared login gate (phone-based + mock SMS OTP verification).
-   - Switch between **Farmer**, **Buyer**, and **Finance Officer** roles.
-   - Micro-finance officers search farmers, view risk profiles, and approve micro-credits.
+8. **Alt-Data Credit Score (FarmScore) & Gamification**
+   - Transparent credit score (0-100) based on field completeness, diagnosis history, marketplace trade, and repayment logs.
+   - Plain-language *"What This Means"* credit eligibility explanation.
+   - **Gamification**: Active telemetry check-in streaks (🔥) and badge achievements (🌱 Bhoomi Putra, 🩺 Dr. Sprout, 🏆 Trade Guru, ⭐ Credit Champion).
 
----
+9. **Finance Officer Portfolio Analytics & PDF Export**
+   - **Portfolio Analytics**: Aggregated regional FarmScores, common seasonal disease cases, and marketplace transaction volume bar charts.
+   - **PDF Credit Report**: One-click browser print memo formatting A4 credit dossiers for offline underwriting review.
 
-## 🛠️ Technology Stack
+10. **SMS & WhatsApp Fallback Channel**
+    - Twilio-compatible webhook endpoint (`POST /api/webhook/whatsapp`) processing incoming text/media queries from feature phones.
+    - Integrated WhatsApp Simulation Sandbox panel for live interactive demo testing.
 
-- **Frontend**: React 18, TypeScript, Tailwind CSS, Recharts, Lucide Icons, i18next (English & Hindi support), Axios.
-- **Backend**: Python, FastAPI, SQLAlchemy ORM, Uvicorn, PyJWT (pure Python, zero binary compilation errors).
-- **Database**: SQLite (default local, 90-day time-series history pre-seeded) / PostgreSQL (production docker-compose).
-- **Containerization**: Docker & Docker Compose.
-
----
-
-## 📊 Architecture Diagram
-
-```
-                 +-------------------------------------------------+
-                 |             Mobile Web Browser                  |
-                 |      (React + Tailwind + i18next + Recharts)    |
-                 +-----------------------+-------------------------+
-                                         |
-                                         | REST HTTP Calls
-                                         v
-                 +-------------------------------------------------+
-                 |              FastAPI Web Server                 |
-                 +----+------------------+--------------------+----+
-                      |                  |                    |
-                      v                  v                    v
-           +--------------------+  +------------+  +--------------------+
-           | Gemini Vision API  |  | Open-Meteo |  | SQLite/PostgreSQL  |
-           |   (Crop Doctor)    |  | (Weather)  |  |  (Database Store)  |
-           +--------------------+  +------------+  +---------+----------+
-                                                             ^
-                                                             | Telemetry
-                                                   +---------+----------+
-                                                   | IoT Daemon Thread  |
-                                                   | (Sensor Simulator) |
-                                                   +--------------------+
-```
+11. **PWA & Mobile-First Design**
+    - Installable Web Manifest (`manifest.json`) and Service Worker (`sw.js`) for offline caching of weather and field data.
+    - Optimized for low-end Android mobile devices (360px–430px screen width).
+    - Persistent **Demo Mode Transparency Banner** detailing live vs. simulated data components.
 
 ---
 
@@ -87,12 +64,38 @@ AgriSense AI is an AI-powered full-stack web application designed for smallholde
 
 | Module / Component | What is Real? | What is Simulated? |
 | :--- | :--- | :--- |
-| **User & Session Auth** | Full JWT sessions, password hashing, and user registration. | SMS Gateway (Mocked via a static `123456` OTP screen). |
-| **Crop Doctor** | Full image uploads, diagnosis history, and Gemini 2.5 Flash API calls. | Fallback diagnosis classifier if no Gemini key is provided. |
+| **User & Session Auth** | Full JWT sessions, `passlib[bcrypt]` password hashing, and rate-limited auth protection. | SMS Gateway (Mocked via a static `123456` OTP screen). |
+| **Crop Doctor** | Full image uploads, diagnosis history, plain-language explanations, and Gemini 2.5 Flash API calls. | Fallback diagnosis classifier if no Gemini key is provided. |
+| **WhatsApp Webhook** | Twilio form-urlencoded parser, AI vision pipeline handoff, and plain-text SMS response formatter. | Live Twilio SMS delivery (Interactive in-app sandbox provided). |
 | **Climate Alerts** | Live REST requests to Open-Meteo using GPS coordinates. | Fallback 7-day forecast if offline. |
-| **Smart Sensors** | SQLAlchemy schema and Recharts visualizations. | Background simulator daemon generating NPK/pH readings. |
-| **Marketplace** | Listings creation, search filters, bidding, and trade history. | Mandi index data feed (calculated statistically). |
-| **Credit Scoring** | The FarmScore formula, breakdown metrics, and loan offers. | Simulated transaction payment status (repaid vs defaulted). |
+| **Smart Sensors & NDVI** | SQLAlchemy schema, Recharts visualizations, and 5x5 grid renderer. | Background simulator daemon generating NPK/pH & Sentinel-2 grid index. |
+| **Marketplace & Alerts** | Listings creation, search filters, bidding, trade logs, and price alert matcher. | Mandi index data feed (calculated statistically). |
+| **Credit Scoring & Badges** | The FarmScore formula, breakdown metrics, loan offers, streak calculations, and badge achievements. | Simulated transaction payment status (repaid vs defaulted). |
+| **PWA & Offline** | Web Manifest (`manifest.json`) and Service Worker (`sw.js`) offline asset caching. | N/A |
+
+---
+
+## 🛠️ Technology Stack
+
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Recharts, Lucide Icons, i18next (English & Hindi), Axios, Web Speech API.
+- **Backend**: Python, FastAPI, SQLAlchemy ORM, Uvicorn, PyJWT, Passlib (bcrypt), Rate Limiter.
+- **Database**: SQLite (default local, 90-day time-series history pre-seeded) / PostgreSQL.
+- **Containerization & Deployment**: Docker, Docker Compose, Vercel ready (`vercel.json`).
+
+---
+
+## 🔑 Environment Variables
+
+The backend application supports the following environment variables (defined in `.env`):
+
+| Variable | Description | Default | Required? |
+| :--- | :--- | :--- | :--- |
+| `SECRET_KEY` | Secret key used for signing JWT authentication tokens. | `agrisense_super_secret_jwt_key_2026` | Recommended in production |
+| `GEMINI_API_KEY` | Google Gemini API key for live AI leaf diagnosis. | Empty (uses fallback classifier) | Optional |
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID for WhatsApp webhook validation. | Empty (uses mock sandbox) | Optional |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token for signature validation. | Empty | Optional |
+| `TWILIO_WHATSAPP_NUMBER` | WhatsApp Business sender phone number. | `whatsapp:+14155238886` | Optional |
+| `CORS_ORIGINS` | Comma-separated list of allowed CORS origins. | `https://agrisense-ai-nu.vercel.app,http://localhost:5173` | Recommended in production |
 
 ---
 
@@ -118,7 +121,7 @@ Ensure you have **Node.js (v18+)** and **Python (v3.10+)** installed on your sys
    ```bash
    pip install -r requirements.txt
    ```
-5. Run the database seeding script to populate 15 farmers, 90 days of sensor history, and active market listings:
+5. Run the database seeding script to populate 15 farmers, 90 days of sensor history, Q&A discussions, and market listings:
    ```bash
    python -m seed
    ```

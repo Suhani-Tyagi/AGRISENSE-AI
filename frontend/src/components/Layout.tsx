@@ -60,6 +60,8 @@ export const Layout: React.FC<LayoutProps> = ({
     setIsDark(!isDark);
   };
 
+  const [showDemoModal, setShowDemoModal] = useState(false);
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
@@ -68,12 +70,62 @@ export const Layout: React.FC<LayoutProps> = ({
       <div className="w-full max-w-md bg-earth-50 dark:bg-forest-900 min-h-screen shadow-2xl border-x border-earth-200 dark:border-forest-700 flex flex-col relative">
         
         {/* Demo Mode Banner */}
-        <div className="bg-terracotta-50 text-terracotta-800 dark:bg-terracotta-900/30 dark:text-terracotta-400 text-xs font-bold py-2 px-4 flex items-center justify-between text-center border-b border-terracotta-200/50">
-          <div className="flex items-center space-x-1 mx-auto">
-            <ShieldAlert className="w-4 h-4 animate-pulse" />
-            <span>{t('demoMode')}</span>
+        <div 
+          onClick={() => setShowDemoModal(!showDemoModal)}
+          className="bg-amber-500 text-white text-[11px] font-black py-1.5 px-4 flex items-center justify-between text-center border-b border-amber-600 cursor-pointer shadow-sm hover:bg-amber-600 transition"
+        >
+          <div className="flex items-center space-x-1.5 mx-auto">
+            <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
+            <span>DEMO MODE ACTIVE: Tap for Data Transparency (Live vs Simulated)</span>
           </div>
         </div>
+
+        {/* Demo Mode Transparency Modal */}
+        {showDemoModal && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-forest-800 border border-earth-200 dark:border-forest-700 max-w-sm w-full rounded-3xl p-5 shadow-2xl space-y-4 text-xs">
+              <div className="flex justify-between items-center border-b border-earth-150 dark:border-forest-700 pb-2">
+                <h3 className="font-black text-sm text-earth-900 dark:text-forest-100 flex items-center space-x-1.5">
+                  <ShieldAlert className="w-4 h-4 text-amber-500" />
+                  <span>Data Source Transparency</span>
+                </h3>
+                <button onClick={() => setShowDemoModal(false)} className="text-earth-500 font-bold text-base">✕</button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Live Sources */}
+                <div className="p-3 bg-forest-50 dark:bg-forest-900/40 rounded-xl border border-forest-150 dark:border-forest-800 space-y-1">
+                  <strong className="text-forest-700 dark:text-forest-300 font-bold block uppercase text-[10px]">🟢 Live Real-Time Components</strong>
+                  <ul className="text-earth-700 dark:text-forest-200 space-y-1 text-[11px] list-disc list-inside">
+                    <li>Google Gemini AI Vision (Crop leaf disease diagnosis)</li>
+                    <li>Web Speech API (Bilingual Voice Recognition)</li>
+                    <li>FastAPI & SQLite DB (User accounts & listings)</li>
+                    <li>Twilio WhatsApp Webhook (SMS fallback pipeline)</li>
+                    <li>Client-Side PDF Generator (Browser print memo)</li>
+                  </ul>
+                </div>
+
+                {/* Simulated Sources */}
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-150 dark:border-amber-900/50 space-y-1">
+                  <strong className="text-amber-700 dark:text-amber-300 font-bold block uppercase text-[10px]">🟡 Simulated Mock Datasets (MVP)</strong>
+                  <ul className="text-earth-700 dark:text-forest-200 space-y-1 text-[11px] list-disc list-inside">
+                    <li>IoT Soil Sensors (Moisture, NPK & pH historical logs)</li>
+                    <li>Mandi Regional Commodity Price Trends</li>
+                    <li>Sentinel-2 Satellite NDVI Vegetation Health Grid</li>
+                    <li>Simulated Micro-Loan Repayment Outcomes</li>
+                  </ul>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowDemoModal(false)}
+                className="btn-primary w-full text-xs py-2 rounded-xl font-bold"
+              >
+                Close Transparency Panel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Navigation Bar */}
         <header className="sticky top-0 bg-white dark:bg-forest-800 border-b border-earth-200 dark:border-forest-700 z-50 px-4 py-3 flex items-center justify-between shadow-sm">

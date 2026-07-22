@@ -1336,6 +1336,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                           <strong className="font-bold text-earth-700 dark:text-forest-300 block">{t('notes')}</strong>
                           <p className="text-earth-500 dark:text-forest-400 mt-0.5 leading-normal italic">{diagnosisResult.notes}</p>
                         </div>
+
+                        {/* Plain language explanation */}
+                        <div className="bg-white dark:bg-forest-900 p-3 rounded-lg border border-earth-150 dark:border-forest-800 space-y-1">
+                          <strong className="text-[11px] font-black text-earth-850 dark:text-forest-100 flex items-center space-x-1">
+                            <span>💡 What This Means / इसका अर्थ:</span>
+                          </strong>
+                          <p className="text-[11px] text-earth-650 dark:text-forest-300 leading-normal">
+                            {diagnosisResult.severity === 'high'
+                              ? 'Critical infection detected! Apply treatments within ' + diagnosisResult.urgency_days + ' days to prevent crop failure across your field.'
+                              : 'Mild/moderate infection detected. Apply organic spray or neem oil this week to protect nearby leaves.'}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1778,6 +1790,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                       }`}>
                         {creditData.score >= 75 ? 'Excellent Credit' : creditData.score >= 50 ? 'Moderate Credit' : 'Subprime Credit'}
                       </span>
+
+                      {/* Plain language explanation */}
+                      <div className="mt-3 p-3 bg-white dark:bg-forest-900 rounded-xl border border-earth-150 dark:border-forest-800 text-center space-y-1 w-full">
+                        <strong className="text-[11px] font-black text-earth-850 dark:text-forest-100 block">
+                          💡 What This Means / इसका अर्थ:
+                        </strong>
+                        <p className="text-[10px] text-earth-650 dark:text-forest-300 leading-normal">
+                          {creditData.score >= 75
+                            ? 'Your FarmScore of ' + creditData.score + '/100 qualifies you for pre-approved low-interest micro-loans from NABARD rural partners.'
+                            : creditData.score >= 50
+                              ? 'Your FarmScore of ' + creditData.score + '/100 qualifies you for standard micro-credit. Keep logging soil data to reach 75+.'
+                              : 'Your FarmScore is below 50. Complete more Crop Doctor scans and marketplace sales to raise your rating.'}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Active Streak */}
