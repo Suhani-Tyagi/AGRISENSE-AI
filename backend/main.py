@@ -18,10 +18,20 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend local development
+# Enable CORS with restricted origin matching actual deployed and local dev servers
+allowed_origins = [
+    "https://agrisense-ai-nu.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict to frontend domain
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

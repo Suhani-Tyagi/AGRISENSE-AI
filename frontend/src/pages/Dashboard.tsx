@@ -9,6 +9,7 @@ import {
 import { SoilChart } from '../components/SoilChart';
 import { PriceChart } from '../components/PriceChart';
 import { VoiceInput } from '../components/VoiceInput';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 interface DashboardProps {
   token: string;
@@ -437,46 +438,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
               )}
 
               {/* Weather Tailored Forecast */}
-              {weather && weather.forecast && (
-                <div className="card-earth">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2">
-                      <Calendar className="w-5 h-5 text-forest-500" />
-                      <span>{t('weatherAlerts')}</span>
-                    </h3>
-                    {weather.is_simulated && (
-                      <span className="px-2 py-0.5 bg-earth-200 text-earth-700 text-[10px] font-bold rounded-full uppercase">Simulated</span>
-                    )}
-                  </div>
-                  
-                  {/* Today's tailored spray window advice */}
-                  <div className={`p-4 rounded-xl border flex items-start space-x-3 mb-4 ${
-                    weather.forecast[0].ok_to_spray 
-                      ? 'bg-forest-50 border-forest-200 dark:bg-forest-800/40 dark:border-forest-700' 
-                      : 'bg-terracotta-50 border-terracotta-200 dark:bg-terracotta-900/10 dark:border-terracotta-800'
-                  }`}>
-                    <Activity className={`w-5 h-5 flex-shrink-0 mt-0.5 ${weather.forecast[0].ok_to_spray ? 'text-forest-600' : 'text-terracotta-500'}`} />
-                    <div className="text-xs">
-                      <strong className="font-bold text-earth-800 dark:text-forest-200 block mb-1">
-                        {t('sprayPesticide')}: {weather.forecast[0].ok_to_spray ? t('goodDayToSpray') : t('avoidSpray')}
-                      </strong>
-                      <p className="text-earth-500 dark:text-forest-400 leading-normal">{weather.forecast[0].spray_reason}</p>
+              <ErrorBoundary fallbackTitle="Weather Forecast Panel Failed">
+                {weather && weather.forecast && (
+                  <div className="card-earth">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2">
+                        <Calendar className="w-5 h-5 text-forest-500" />
+                        <span>{t('weatherAlerts')}</span>
+                      </h3>
+                      {weather.is_simulated && (
+                        <span className="px-2 py-0.5 bg-earth-200 text-earth-700 text-[10px] font-bold rounded-full uppercase">Simulated</span>
+                      )}
+                    </div>
+                    
+                    {/* Today's tailored spray window advice */}
+                    <div className={`p-4 rounded-xl border flex items-start space-x-3 mb-4 ${
+                      weather.forecast[0].ok_to_spray 
+                        ? 'bg-forest-50 border-forest-200 dark:bg-forest-800/40 dark:border-forest-700' 
+                        : 'bg-terracotta-50 border-terracotta-200 dark:bg-terracotta-900/10 dark:border-terracotta-800'
+                    }`}>
+                      <Activity className={`w-5 h-5 flex-shrink-0 mt-0.5 ${weather.forecast[0].ok_to_spray ? 'text-forest-600' : 'text-terracotta-500'}`} />
+                      <div className="text-xs">
+                        <strong className="font-bold text-earth-800 dark:text-forest-200 block mb-1">
+                          {t('sprayPesticide')}: {weather.forecast[0].ok_to_spray ? t('goodDayToSpray') : t('avoidSpray')}
+                        </strong>
+                        <p className="text-earth-500 dark:text-forest-400 leading-normal">{weather.forecast[0].spray_reason}</p>
+                      </div>
+                    </div>
+
+                    {/* 7-day small card list */}
+                    <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
+                      {weather.forecast.map((f: any, idx: number) => (
+                        <div key={idx} className="flex-shrink-0 w-24 bg-earth-50 dark:bg-forest-900/50 p-3 rounded-xl border border-earth-100 dark:border-forest-800 text-center">
+                          <span className="text-[10px] font-bold text-earth-400 block">{idx === 0 ? 'Today' : f.date.split('-').slice(1).join('/')}</span>
+                          <span className="text-xs font-black block mt-2 text-earth-800 dark:text-forest-100">{f.temp_max}°C</span>
+                          <span className="text-[10px] text-earth-500 dark:text-forest-400 block mt-1">{f.weather_desc}</span>
+                          {f.rain_sum > 0 && <span className="text-[9px] font-bold text-blue-500 dark:text-blue-400 mt-1 block">🌧️ {f.rain_sum}mm</span>}
+                        </div>
+                      ))}
                     </div>
                   </div>
-
-                  {/* 7-day small card list */}
-                  <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
-                    {weather.forecast.map((f: any, idx: number) => (
-                      <div key={idx} className="flex-shrink-0 w-24 bg-earth-50 dark:bg-forest-900/50 p-3 rounded-xl border border-earth-100 dark:border-forest-800 text-center">
-                        <span className="text-[10px] font-bold text-earth-400 block">{idx === 0 ? 'Today' : f.date.split('-').slice(1).join('/')}</span>
-                        <span className="text-xs font-black block mt-2 text-earth-800 dark:text-forest-100">{f.temp_max}°C</span>
-                        <span className="text-[10px] text-earth-500 dark:text-forest-400 block mt-1">{f.weather_desc}</span>
-                        {f.rain_sum > 0 && <span className="text-[9px] font-bold text-blue-500 dark:text-blue-400 mt-1 block">🌧️ {f.rain_sum}mm</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
+              </ErrorBoundary>
 
               {/* Smart Soil & Irrigation Advisor */}
               <div className="card-earth">
@@ -612,7 +615,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                             </button>
                           </div>
                         </div>
-                        <SoilChart data={selectedField.sensor_readings} days={soilHistoryDays} />
+                        <ErrorBoundary fallbackTitle="Soil Analytics Chart Failed">
+                          <SoilChart data={selectedField.sensor_readings} days={soilHistoryDays} />
+                        </ErrorBoundary>
                       </div>
                     )}
 
@@ -924,7 +929,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                             <p className="text-[10px] text-earth-500 leading-normal border-t border-earth-100 dark:border-forest-800 pt-1">
                               {priceRecommendation.explain_plain}
                             </p>
-                            <PriceChart history={priceRecommendation.price_history_5weeks} crop={listCrop} />
+                            <ErrorBoundary fallbackTitle="Price Trend Chart Failed">
+                              <PriceChart history={priceRecommendation.price_history_5weeks} crop={listCrop} />
+                            </ErrorBoundary>
                           </div>
                         )}
 

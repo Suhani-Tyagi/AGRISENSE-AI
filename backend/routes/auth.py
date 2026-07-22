@@ -4,10 +4,11 @@ from ..database import get_db
 from ..models import User, CreditScore
 from ..schemas import UserCreate, UserLogin, Token, UserResponse
 from ..auth import hash_password, verify_password, create_access_token, get_current_user
+from ..rate_limiter import check_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/signup", response_model=UserResponse)
+@router.post("/signup", response_model=UserResponse, dependencies=[Depends(check_rate_limit)])
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     # Check if user already exists
     existing_user = db.query(User).filter(User.phone == user_data.phone).first()
@@ -47,7 +48,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         
     return new_user
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, dependencies=[Depends(check_rate_limit)])
 def login(login_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.phone == login_data.phone).first()
     if not user or not verify_password(login_data.password, user.password_hash):

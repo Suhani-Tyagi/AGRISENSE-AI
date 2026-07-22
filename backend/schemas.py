@@ -1,20 +1,36 @@
-from pydantic import BaseModel, Field as PyField
+from pydantic import BaseModel, Field as PyField, field_validator
 from typing import Optional, List
 from datetime import datetime
+import re
 
 # --- USER SCHEMAS ---
 class UserBase(BaseModel):
-    name: str
-    phone: str
-    email: Optional[str] = None
-    role: str  # 'farmer', 'buyer', 'finance_officer'
+    name: str = PyField(..., min_length=2, max_length=50, description="Name must be between 2 and 50 characters")
+    phone: str = PyField(..., min_length=10, max_length=15, description="Phone must be between 10 and 15 digits")
+    email: Optional[str] = PyField(None, max_length=100, description="Email cannot exceed 100 characters")
+    role: str = PyField(..., max_length=20)  # 'farmer', 'buyer', 'finance_officer'
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        # Match standard phone format (10 to 15 digits, optional leading +, spaces, or dashes)
+        if not re.match(r"^\+?[\d\s-]{10,15}$", v):
+            raise ValueError("Phone number must contain between 10 and 15 digits.")
+        return v
 
 class UserCreate(UserBase):
-    password: str
+    password: str = PyField(..., min_length=6, max_length=100, description="Password must be between 6 and 100 characters")
 
 class UserLogin(BaseModel):
-    phone: str
-    password: str
+    phone: str = PyField(..., min_length=10, max_length=15)
+    password: str = PyField(..., min_length=6, max_length=100)
+
+    @field_validator('phone')
+    @classmethod
+    def validate_phone_login(cls, v: str) -> str:
+        if not re.match(r"^\+?[\d\s-]{10,15}$", v):
+            raise ValueError("Phone number must contain between 10 and 15 digits.")
+        return v
 
 class Token(BaseModel):
     access_token: str
@@ -33,14 +49,14 @@ class UserResponse(UserBase):
 
 # --- SENSOR SCHEMAS ---
 class SensorReadingBase(BaseModel):
-    soil_moisture: float
-    nitrogen: float
-    phosphorus: float
-    potassium: float
-    ph: float
+    soil_moisture: float = PyField(..., ge=0.0, le=100.0, description="Soil moisture must be between 0 and 100%")
+    nitrogen: float = PyField(..., ge=0.0, description="Nitrogen value cannot be negative")
+    phosphorus: float = PyField(..., ge=0.0, description="Phosphorus value cannot be negative")
+    potassium: float = PyField(..., ge=0.0, description="Potassium value cannot be negative")
+    ph: float = PyField(..., ge=0.0, le=14.0, description="pH must be between 0.0 and 14.0")
 
 class SensorReadingCreate(SensorReadingBase):
-    field_id: int
+    field_id: int = PyField(..., gt=0)
 
 class SensorReadingResponse(SensorReadingBase):
     id: int
@@ -53,11 +69,11 @@ class SensorReadingResponse(SensorReadingBase):
 
 # --- FIELD SCHEMAS ---
 class FieldBase(BaseModel):
-    name: str
-    crop_type: str
-    size_acres: float
-    latitude: float
-    longitude: float
+    name: str = PyField(..., min_length=2, max_length=50, description="Field name must be between 2 and 50 characters")
+    crop_type: str = PyField(..., min_length=2, max_length=30, description="Crop type must be between 2 and 30 characters")
+    size_acres: float = PyField(..., gt=0.0, description="Field size in acres must be greater than zero")
+    latitude: float = PyField(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
+    longitude: float = PyField(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
 
 class FieldCreate(FieldBase):
     pass
@@ -75,19 +91,19 @@ class FieldResponse(FieldBase):
 
 # --- DIAGNOSIS SCHEMAS ---
 class DiagnosisBase(BaseModel):
-    crop_type: str
-    disease_name: str
-    severity: str
-    confidence: float
-    treatments_organic: Optional[str] = None
-    treatments_chemical: Optional[str] = None
-    cost_estimate: float
-    urgency_days: int
-    notes: Optional[str] = None
+    crop_type: str = PyField(..., min_length=2, max_length=30)
+    disease_name: str = PyField(..., min_length=2, max_length=100)
+    severity: str = PyField(..., max_length=20)
+    confidence: float = PyField(..., ge=0.0, le=1.0)
+    treatments_organic: Optional[str] = PyField(None, max_length=1000)
+    treatments_chemical: Optional[str] = PyField(None, max_length=1000)
+    cost_estimate: float = PyField(..., ge=0.0, description="Cost estimate cannot be negative")
+    urgency_days: int = PyField(..., ge=0, description="Urgency days cannot be negative")
+    notes: Optional[str] = PyField(None, max_length=1000)
 
 class DiagnosisCreate(DiagnosisBase):
-    field_id: Optional[int] = None
-    image_url: Optional[str] = None
+    field_id: Optional[int] = PyField(None, gt=0)
+    image_url: Optional[str] = PyField(None, max_length=255)
 
 class DiagnosisResponse(DiagnosisBase):
     id: int
@@ -102,14 +118,21 @@ class DiagnosisResponse(DiagnosisBase):
 
 # --- OFFER SCHEMAS ---
 class OfferBase(BaseModel):
-    offered_price_per_kg: float
-    quantity_kg: float
+    offered_price_per_kg: float = PyField(..., gt=0.0, description="Offered price must be positive")
+    quantity_kg: float = PyField(..., gt=0.0, description="Quantity must be positive")
 
 class OfferCreate(OfferBase):
-    listing_id: int
+    listing_id: int = PyField(..., gt=0)
 
 class OfferUpdate(BaseModel):
-    status: str  # 'accepted', 'rejected'
+    status: str = PyField(..., max_length=20)  # 'accepted', 'rejected'
+
+    @field_validator('status')
+    @classmethod
+    def validate_offer_status(cls, v: str) -> str:
+        if v.lower() not in ['accepted', 'rejected']:
+            raise ValueError("Status must be either 'accepted' or 'rejected'")
+        return v.lower()
 
 class OfferResponse(OfferBase):
     id: int
@@ -125,11 +148,11 @@ class OfferResponse(OfferBase):
 
 # --- MARKET LISTING SCHEMAS ---
 class MarketListingBase(BaseModel):
-    crop: str
-    quantity_kg: float
-    quality_grade: str
-    location: str
-    price_per_kg: float
+    crop: str = PyField(..., min_length=2, max_length=30, description="Crop name must be between 2 and 30 characters")
+    quantity_kg: float = PyField(..., gt=0.0, description="Quantity listed must be positive")
+    quality_grade: str = PyField(..., max_length=5, description="Grade cannot exceed 5 characters")
+    location: str = PyField(..., min_length=2, max_length=100, description="Location must be between 2 and 100 characters")
+    price_per_kg: float = PyField(..., gt=0.0, description="Price must be positive")
 
 class MarketListingCreate(MarketListingBase):
     pass

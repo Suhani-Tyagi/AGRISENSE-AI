@@ -7,3 +7,5 @@ requests
 httpx
 python-multipart
 jinja2
+passlib
+bcrypt==4.0.1
