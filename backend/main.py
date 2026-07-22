@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import engine, Base, SessionLocal
 from .simulator import simulate_step
-from .routes import auth, fields, diagnoses, weather, marketplace, credit
+from .routes import auth, fields, diagnoses, weather, marketplace, credit, webhook, forum
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -63,6 +63,8 @@ app.include_router(diagnoses.router, prefix="/api")
 app.include_router(weather.router, prefix="/api")
 app.include_router(marketplace.router, prefix="/api")
 app.include_router(credit.router, prefix="/api")
+app.include_router(webhook.router, prefix="/api")
+app.include_router(forum.router, prefix="/api")
 
 # Add a simple health check route
 @app.get("/")

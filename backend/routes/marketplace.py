@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
-from ..models import User, MarketListing, Offer, Transaction
-from ..schemas import MarketListingCreate, MarketListingResponse, OfferCreate, OfferResponse, OfferUpdate
+from ..models import User, MarketListing, Offer, Transaction, PriceAlert
+from ..schemas import MarketListingCreate, MarketListingResponse, OfferCreate, OfferResponse, OfferUpdate, PriceAlertCreate, PriceAlertResponse
 from ..auth import get_current_user
 from ..credit_engine import update_db_credit_score
 import random
@@ -232,3 +232,91 @@ def update_offer_status(
         update_db_credit_score(db, listing.user_id)
         
     return {"message": f"Offer has been {new_status} successfully", "status": new_status}
+
+@router.get("/alerts", response_model=List[PriceAlertResponse])
+def get_price_alerts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    alerts = db.query(PriceAlert).filter(PriceAlert.user_id == current_user.id, PriceAlert.is_active == 1).all()
+    return alerts
+
+@router.post("/alerts", response_model=PriceAlertResponse)
+def create_price_alert(
+    data: PriceAlertCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if data.alert_type not in ["above", "below"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Alert type must be 'above' or 'below'"
+        )
+    
+    # Capitalize crop name to match mock mandi keys
+    crop_name = data.crop.capitalize()
+    
+    new_alert = PriceAlert(
+        user_id=current_user.id,
+        crop=crop_name,
+        target_price=data.target_price,
+        alert_type=data.alert_type,
+        is_active=1
+    )
+    db.add(new_alert)
+    db.commit()
+    db.refresh(new_alert)
+    return new_alert
+
+@router.delete("/alerts/{alert_id}")
+def delete_price_alert(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    alert = db.query(PriceAlert).filter(PriceAlert.id == alert_id, PriceAlert.user_id == current_user.id).first()
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
+    
+    # Soft delete / deactivate
+    alert.is_active = 0
+    db.commit()
+    return {"message": "Alert deleted successfully"}
+
+# Helper to check triggered alerts
+@router.get("/alerts/check")
+def check_triggered_alerts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    active_alerts = db.query(PriceAlert).filter(PriceAlert.user_id == current_user.id, PriceAlert.is_active == 1).all()
+    triggered = []
+    
+    for alert in active_alerts:
+        # Resolve current simulated average price for this crop
+        crop_key = alert.crop.capitalize()
+        if crop_key in MOCK_MANDI_PRICES:
+            # Let's take Grade B (average crop quality) as mandi standard benchmark
+            mandi = MOCK_MANDI_PRICES[crop_key]["B"]
+            current_price = (mandi["min"] + mandi["max"]) / 2
+            
+            is_triggered = False
+            if alert.alert_type == "above" and current_price >= alert.target_price:
+                is_triggered = True
+            elif alert.alert_type == "below" and current_price <= alert.target_price:
+                is_triggered = True
+                
+            if is_triggered:
+                triggered.append({
+                    "id": alert.id,
+                    "crop": alert.crop,
+                    "target_price": alert.target_price,
+                    "alert_type": alert.alert_type,
+                    "current_price": round(current_price, 2),
+                    "message": f"🚨 {alert.crop} price is now ₹{round(current_price, 2)}/kg, which is {alert.alert_type} your target of ₹{alert.target_price}/kg!"
+                })
+                
+    return triggered

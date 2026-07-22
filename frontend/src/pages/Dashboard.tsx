@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { SoilChart } from '../components/SoilChart';
 import { PriceChart } from '../components/PriceChart';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, Cell, CartesianGrid } from 'recharts';
 import { VoiceInput } from '../components/VoiceInput';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { CardSkeleton, ChartSkeleton, ListSkeleton } from '../components/SkeletonLoader';
@@ -32,6 +33,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'forum'>('dashboard');
+
+  // --- FORUM STATES ---
+  const [forumQuestions, setForumQuestions] = useState<any[]>([]);
+  const [forumCropFilter, setForumCropFilter] = useState('');
+  const [forumRegionFilter, setForumRegionFilter] = useState('');
+  const [newQuestionText, setNewQuestionText] = useState('');
+  const [newQuestionCrop, setNewQuestionCrop] = useState('Tomato');
+  const [newQuestionRegion, setNewQuestionRegion] = useState('Rajasthan');
+  const [newAnswerTexts, setNewAnswerTexts] = useState<Record<number, string>>({});
+  const [forumLoading, setForumLoading] = useState(false);
+
+  // --- PRICE ALERT STATES ---
+  const [priceAlerts, setPriceAlerts] = useState<any[]>([]);
+  const [triggeredAlerts, setTriggeredAlerts] = useState<any[]>([]);
+  const [newAlertCrop, setNewAlertCrop] = useState('Tomato');
+  const [newAlertPrice, setNewAlertPrice] = useState('');
+  const [newAlertCondition, setNewAlertCondition] = useState('above');
 
   // Onboarding tour states
   const [tourStep, setTourStep] = useState<number | null>(null);
@@ -126,6 +145,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
   const [sensorConnected, setSensorConnected] = useState(false);
   const [sensorStatusMsg, setSensorStatusMsg] = useState('');
   const [soilHistoryDays, setSoilHistoryDays] = useState(30);
+  const [advisorView, setAdvisorView] = useState<'charts' | 'ndvi' | 'yield'>('charts');
+  const [yieldPrediction, setYieldPrediction] = useState<any>(null);
+  const [yieldLoading, setYieldLoading] = useState(false);
 
   // Field Registration
   const [showRegField, setShowRegField] = useState(false);
@@ -143,6 +165,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
   const [leafPreview, setLeafPreview] = useState<string | null>(null);
   const [leafSymptomText, setLeafSymptomText] = useState('');
   const [diagnosisResult, setDiagnosisResult] = useState<any>(null);
+
+  // WhatsApp Fallback Sandbox States
+  const [whatsappFrom, setWhatsappFrom] = useState('+91 98765 43210');
+  const [whatsappBody, setWhatsappBody] = useState('DIAGNOSE Tomato leaf');
+  const [whatsappMediaUrl, setWhatsappMediaUrl] = useState('');
+  const [whatsappResponse, setWhatsappResponse] = useState('');
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [diagnosesHistory, setDiagnosesHistory] = useState<any[]>([]);
   const [diagLoading, setDiagLoading] = useState(false);
 
@@ -173,6 +202,112 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
   const [mfoFarmers, setMfoFarmers] = useState<any[]>([]);
   const [selectedFarmerReport, setSelectedFarmerReport] = useState<any>(null);
   const [mfoSearch, setMfoSearch] = useState('');
+  const [creditAnalytics, setCreditAnalytics] = useState<any>(null);
+  const [mfoView, setMfoView] = useState<'registry' | 'analytics'>('registry');
+
+  // --- FORUM HANDLERS ---
+  const fetchForumQuestions = async () => {
+    setForumLoading(true);
+    try {
+      let url = `${apiBaseUrl}/api/forum/?`;
+      if (forumCropFilter) url += `crop_type=${forumCropFilter}&`;
+      if (forumRegionFilter) url += `region=${forumRegionFilter}&`;
+      
+      const res = await axios.get(url, axiosConfig);
+      setForumQuestions(res.data);
+    } catch (err: any) {
+      setError("Failed to load forum Q&A.");
+    } finally {
+      setForumLoading(false);
+    }
+  };
+
+  const handleCreateQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await axios.post(`${apiBaseUrl}/api/forum/question`, {
+        crop_type: newQuestionCrop,
+        region: newQuestionRegion,
+        question_text: newQuestionText
+      }, axiosConfig);
+      
+      setNewQuestionText('');
+      setSuccess("Question posted to Community Forum!");
+      fetchForumQuestions();
+    } catch (err: any) {
+      setError("Failed to post question.");
+    }
+  };
+
+  const handleSubmitAnswer = async (qId: number) => {
+    const ansText = newAnswerTexts[qId];
+    if (!ansText || !ansText.trim()) return;
+    setError('');
+    try {
+      await axios.post(`${apiBaseUrl}/api/forum/question/${qId}/answer`, {
+        answer_text: ansText
+      }, axiosConfig);
+      
+      setNewAnswerTexts(prev => ({ ...prev, [qId]: '' }));
+      setSuccess("Your response has been posted!");
+      fetchForumQuestions();
+    } catch (err: any) {
+      setError("Failed to post answer.");
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'forum') {
+      fetchForumQuestions();
+    }
+  }, [activeTab, forumCropFilter, forumRegionFilter]);
+
+  // --- PRICE ALERT HANDLERS ---
+  const fetchPriceAlerts = async () => {
+    try {
+      const res = await axios.get(`${apiBaseUrl}/api/marketplace/alerts`, axiosConfig);
+      setPriceAlerts(res.data);
+    } catch (err) {}
+  };
+
+  const checkTriggeredAlerts = async () => {
+    try {
+      const res = await axios.get(`${apiBaseUrl}/api/marketplace/alerts/check`, axiosConfig);
+      setTriggeredAlerts(res.data);
+    } catch (err) {}
+  };
+
+  const handleCreatePriceAlert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await axios.post(`${apiBaseUrl}/api/marketplace/alerts`, {
+        crop: newAlertCrop,
+        target_price: parseFloat(newAlertPrice),
+        alert_type: newAlertCondition
+      }, axiosConfig);
+      
+      setNewAlertPrice('');
+      setSuccess("Price trend alert set successfully!");
+      fetchPriceAlerts();
+      checkTriggeredAlerts();
+    } catch (err: any) {
+      setError("Failed to create price alert.");
+    }
+  };
+
+  const handleDeletePriceAlert = async (id: number) => {
+    setError('');
+    try {
+      await axios.delete(`${apiBaseUrl}/api/marketplace/alerts/${id}`, axiosConfig);
+      setSuccess("Price trend alert removed.");
+      fetchPriceAlerts();
+      checkTriggeredAlerts();
+    } catch (err: any) {
+      setError("Failed to delete price alert.");
+    }
+  };
 
   // --- INITIAL DATA FETCH ---
   useEffect(() => {
@@ -207,6 +342,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
 
         // Fetch Credit Score
         fetchCreditScore();
+
+        // Fetch Price Alerts
+        fetchPriceAlerts();
+        checkTriggeredAlerts();
       } else if (role === 'buyer') {
         // Fetch marketplace listings
         fetchBuyerListings();
@@ -214,6 +353,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
         // Fetch all farmers for credit underwriting
         const mfoRes = await axios.get(`${apiBaseUrl}/api/credit/farmers`, axiosConfig);
         setMfoFarmers(mfoRes.data);
+        try {
+          const analyticsRes = await axios.get(`${apiBaseUrl}/api/credit/analytics`, axiosConfig);
+          setCreditAnalytics(analyticsRes.data);
+        } catch (analyticsErr) {}
       }
     } catch (err: any) {
       setError("Failed to fetch dashboard data. Please try again.");
@@ -266,6 +409,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
     } catch (err) {}
   };
 
+  const fetchYieldPrediction = async (fieldId: number) => {
+    setYieldLoading(true);
+    try {
+      const res = await axios.get(`${apiBaseUrl}/api/fields/${fieldId}/yield-prediction`, axiosConfig);
+      setYieldPrediction(res.data);
+    } catch (err) {
+      setYieldPrediction(null);
+    } finally {
+      setYieldLoading(false);
+    }
+  };
+
   const fetchFieldDetails = async (fieldId: number, lat: number, lng: number) => {
     try {
       // Get field sensor details
@@ -278,6 +433,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
 
       // Get weather for this field
       fetchWeather(lat, lng);
+
+      // Get yield prediction
+      fetchYieldPrediction(fieldId);
     } catch (err) {}
   };
 
@@ -409,6 +567,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
     }
   };
 
+  const handleSendWhatsapp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWhatsappLoading(true);
+    setWhatsappResponse('');
+    try {
+      const params = new URLSearchParams();
+      params.append('From', whatsappFrom);
+      params.append('Body', whatsappBody);
+      if (whatsappMediaUrl) {
+        params.append('MediaUrl0', whatsappMediaUrl);
+      }
+      
+      const res = await axios.post(`${apiBaseUrl}/api/webhook/whatsapp`, params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      setWhatsappResponse(res.data);
+      // Refresh histories and score
+      const diagRes = await axios.get(`${apiBaseUrl}/api/diagnoses/`, axiosConfig);
+      setDiagnosesHistory(diagRes.data);
+      fetchCreditScore();
+      setSuccess("Simulated WhatsApp webhook executed successfully!");
+    } catch (err: any) {
+      setWhatsappResponse('Error sending WhatsApp: ' + (err.response?.data || err.message));
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
   // Pricing Assistant Query
   useEffect(() => {
     if (listCrop && listGrade) {
@@ -536,6 +724,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
         </div>
       )}
 
+      {/* Global Section Tabs (Dashboard vs Community Forum) */}
+      <div className="flex space-x-2 border-b border-earth-200 dark:border-forest-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex-1 py-2 px-4 rounded-xl text-xs font-black transition active:scale-95 ${
+            activeTab === 'dashboard'
+              ? 'bg-forest-600 text-white shadow'
+              : 'bg-earth-100 dark:bg-forest-800 text-earth-600 dark:text-forest-300'
+          }`}
+        >
+          🌾 Main Dashboard
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('forum')}
+          className={`flex-1 py-2 px-4 rounded-xl text-xs font-black transition active:scale-95 ${
+            activeTab === 'forum'
+              ? 'bg-forest-600 text-white shadow'
+              : 'bg-earth-100 dark:bg-forest-800 text-earth-600 dark:text-forest-300'
+          }`}
+        >
+          💬 Community Forum
+        </button>
+      </div>
+
       {/* Loading state with pulsing skeletons */}
       {loading && (
         <div className="space-y-6">
@@ -548,7 +762,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
         </div>
       )}
 
-      {!loading && (
+      {!loading && activeTab === 'dashboard' && (
         <>
           {/* ========================================================================= */}
           {/* ============================= FARMER ROLE ============================== */}
@@ -556,6 +770,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
           {role === 'farmer' && (
             <div className="space-y-6">
               
+              {/* Triggered Price Alerts Notification Banner */}
+              {triggeredAlerts && triggeredAlerts.length > 0 && (
+                <div className="space-y-3">
+                  {triggeredAlerts.map((alert: any) => (
+                    <div key={alert.id} className="p-4 bg-amber-500 text-white rounded-2xl flex items-start space-x-3 shadow-lg animate-pulse">
+                      <TrendingUp className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <h4 className="font-bold text-sm">💰 Mandi Price Trend Threshold Crossed!</h4>
+                        <p className="mt-1 leading-normal opacity-90">{alert.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Climate Alert Weather Banner */}
               {weather && weather.alerts && weather.alerts.length > 0 && (
                 <div className="space-y-3">
@@ -729,19 +958,60 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                       </div>
                     )}
 
-                    {/* History soil trend charts */}
-                    {selectedField && selectedField.sensor_readings && (
+                    {/* View Selector Toggle Tabs */}
+                    {selectedField && (
+                      <div className="flex space-x-1 bg-earth-100 dark:bg-forest-750 p-1 rounded-xl mb-4 border border-earth-200 dark:border-forest-700 animate-fade-in">
+                        <button
+                          type="button"
+                          onClick={() => setAdvisorView('charts')}
+                          className={`flex-1 text-xs py-2 px-3 rounded-lg font-bold transition flex items-center justify-center space-x-1.5 ${
+                            advisorView === 'charts'
+                              ? 'bg-white text-forest-700 dark:bg-forest-800 dark:text-forest-100 shadow-sm'
+                              : 'text-earth-500 hover:text-earth-800 dark:hover:text-forest-200'
+                          }`}
+                        >
+                          <span>📊 Charts</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdvisorView('ndvi')}
+                          className={`flex-1 text-xs py-2 px-3 rounded-lg font-bold transition flex items-center justify-center space-x-1.5 ${
+                            advisorView === 'ndvi'
+                              ? 'bg-white text-forest-700 dark:bg-forest-800 dark:text-forest-100 shadow-sm'
+                              : 'text-earth-500 hover:text-earth-800 dark:hover:text-forest-200'
+                          }`}
+                        >
+                          <span>🛰️ NDVI</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdvisorView('yield')}
+                          className={`flex-1 text-xs py-2 px-3 rounded-lg font-bold transition flex items-center justify-center space-x-1.5 ${
+                            advisorView === 'yield'
+                              ? 'bg-white text-forest-700 dark:bg-forest-800 dark:text-forest-100 shadow-sm'
+                              : 'text-earth-500 hover:text-earth-800 dark:hover:text-forest-200'
+                          }`}
+                        >
+                          <span>🌾 Yield</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Conditional Advisor Views */}
+                    {selectedField && selectedField.sensor_readings && advisorView === 'charts' && (
                       <div className="space-y-4 pt-4 border-t border-earth-100 dark:border-forest-800">
                         <div className="flex justify-between items-center">
                           <h4 className="text-xs font-bold uppercase tracking-wider text-earth-500">Historical Soil Trends</h4>
                           <div className="flex space-x-1 bg-earth-100 dark:bg-forest-700 rounded-lg p-0.5">
                             <button
+                              type="button"
                               onClick={() => setSoilHistoryDays(30)}
                               className={`text-[10px] font-bold px-2 py-1 rounded-md transition ${soilHistoryDays === 30 ? 'bg-white dark:bg-forest-800 text-forest-600' : 'text-earth-500'}`}
                             >
                               30 Days
                             </button>
                             <button
+                              type="button"
                               onClick={() => setSoilHistoryDays(90)}
                               className={`text-[10px] font-bold px-2 py-1 rounded-md transition ${soilHistoryDays === 90 ? 'bg-white dark:bg-forest-800 text-forest-600' : 'text-earth-500'}`}
                             >
@@ -752,6 +1022,132 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                         <ErrorBoundary fallbackTitle="Soil Analytics Chart Failed">
                           <SoilChart data={selectedField.sensor_readings} days={soilHistoryDays} />
                         </ErrorBoundary>
+                      </div>
+                    )}
+
+                    {selectedField && advisorView === 'ndvi' && (
+                      <div className="space-y-4 pt-4 border-t border-earth-100 dark:border-forest-800">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-earth-500">Satellite NDVI Canopy Health</h4>
+                            <span className="text-[9px] text-earth-450 dark:text-forest-400 block font-mono">
+                              GPS: {selectedField.latitude.toFixed(4)}, {selectedField.longitude.toFixed(4)}
+                            </span>
+                          </div>
+                          <span className="text-[10px] bg-forest-100 text-forest-800 dark:bg-forest-900/50 dark:text-forest-300 px-2 py-0.5 rounded font-bold">
+                            Sentinel-2 Active
+                          </span>
+                        </div>
+
+                        {/* Simulated NDVI Grid Map */}
+                        <div className="relative w-full aspect-square max-w-sm mx-auto bg-earth-200 dark:bg-forest-950 rounded-2xl overflow-hidden border border-earth-300 dark:border-forest-800 flex flex-col justify-between p-2 shadow-inner">
+                          {/* Simulated satellite photography background with grid overlay */}
+                          <div 
+                            className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay" 
+                            style={{ backgroundImage: `url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=400&q=80')` }}
+                          ></div>
+                          
+                          {/* 5x5 grid of NDVI color overlay */}
+                          <div className="grid grid-cols-5 gap-1 w-full h-full relative z-10 p-1">
+                            {[...Array(25)].map((_, idx) => {
+                              // Simulate distinct NDVI values per cell using cell index and field id
+                              const seed = (idx + selectedField.id * 7) % 5;
+                              let ndviVal = 0.3 + (seed * 0.15);
+                              if (ndviVal > 0.95) ndviVal = 0.95;
+                              
+                              let colorClass = "bg-amber-700/60"; // brown/low
+                              let label = "Low Health";
+                              if (ndviVal >= 0.45 && ndviVal < 0.7) {
+                                colorClass = "bg-yellow-500/60"; // yellow/average
+                                label = "Moderate Health";
+                              } else if (ndviVal >= 0.7) {
+                                colorClass = "bg-green-600/70"; // green/excellent
+                                label = "Excellent Canopy";
+                              }
+
+                              return (
+                                <div
+                                  key={idx}
+                                  title={`Cell ${idx + 1}: NDVI ${ndviVal.toFixed(2)} (${label})`}
+                                  className={`${colorClass} rounded transition hover:scale-105 hover:border hover:border-white hover:z-20 flex items-center justify-center text-[9px] font-bold text-white font-mono cursor-pointer`}
+                                  onClick={() => {
+                                    setSuccess(`Field Zone ${idx + 1} Selected - Estimated NDVI: ${ndviVal.toFixed(2)} (${label})`);
+                                  }}
+                                >
+                                  <span>{ndviVal.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* NDVI Legend scale bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-[9px] font-bold text-earth-505 dark:text-forest-300">
+                            <span>0.0 (Poor/Dry Soil)</span>
+                            <span>0.5 (Moderate Canopy)</span>
+                            <span>1.0 (Optimal Health)</span>
+                          </div>
+                          <div className="h-2.5 w-full rounded-full bg-gradient-to-r from-amber-800 via-yellow-500 to-green-600 border border-earth-300 dark:border-forest-800"></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedField && advisorView === 'yield' && (
+                      <div className="space-y-4 pt-4 border-t border-earth-100 dark:border-forest-800 animate-fade-in text-xs">
+                        {yieldLoading ? (
+                          <ListSkeleton />
+                        ) : yieldPrediction ? (
+                          <div className="space-y-4">
+                            {/* Forecast metrics cards */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="p-4 bg-forest-50/50 dark:bg-forest-900/30 border border-forest-100 dark:border-forest-850 rounded-2xl">
+                                <span className="text-[10px] text-earth-500 uppercase font-black block">Yield Estimate</span>
+                                <strong className="text-sm font-black text-forest-700 dark:text-forest-300">
+                                  {yieldPrediction.min_yield_kg.toLocaleString()} - {yieldPrediction.max_yield_kg.toLocaleString()} kg
+                                </strong>
+                                <span className="text-[9px] text-earth-450 block mt-1">Based on {yieldPrediction.size_acres} acres of {yieldPrediction.crop_type}</span>
+                              </div>
+                              <div className="p-4 bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/50 rounded-2xl">
+                                <span className="text-[10px] text-earth-500 uppercase font-black block">Est. Revenue (INR)</span>
+                                <strong className="text-sm font-black text-sky-700 dark:text-sky-350">
+                                  ₹{yieldPrediction.min_revenue_inr.toLocaleString()} - ₹{yieldPrediction.max_revenue_inr.toLocaleString()}
+                                </strong>
+                                <span className="text-[9px] text-earth-450 block mt-1">At average market rates</span>
+                              </div>
+                            </div>
+
+                            {/* Confidence rating and factors */}
+                            <div className="p-4 bg-earth-50/50 dark:bg-forest-900/20 border border-earth-150 dark:border-forest-850 rounded-2xl space-y-3">
+                              <div className="flex justify-between items-center pb-2 border-b border-earth-200/50 dark:border-forest-800">
+                                <strong className="font-bold text-earth-750 dark:text-forest-100">Prediction Confidence</strong>
+                                <span className={`font-black uppercase px-2 py-0.5 rounded text-[10px] ${
+                                  yieldPrediction.confidence_rating === 'High' 
+                                    ? 'bg-forest-100 text-forest-800' 
+                                    : yieldPrediction.confidence_rating === 'Medium' 
+                                      ? 'bg-amber-100 text-amber-800' 
+                                      : 'bg-terracotta-100 text-terracotta-800'
+                                }`}>
+                                  {yieldPrediction.confidence_rating}
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-black text-earth-450 uppercase block">Yield Analysis Factors</span>
+                                <ul className="space-y-1.5">
+                                  {yieldPrediction.breakdown_factors.map((factor: string, idx: number) => (
+                                    <li key={idx} className="flex items-start space-x-2 text-earth-650 dark:text-forest-200">
+                                      <span className="text-forest-500 font-bold">✓</span>
+                                      <span className="leading-normal">{factor}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-earth-500 italic text-center py-4">No yield prediction details available.</p>
+                        )}
                       </div>
                     )}
 
@@ -975,6 +1371,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                   </div>
 
                 </div>
+              </div>
+
+              {/* WhatsApp Fallback Channel Sandbox */}
+              <div className="card-earth">
+                <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2 mb-2">
+                  <span className="p-1 bg-forest-100 dark:bg-forest-800 rounded-lg text-forest-600 dark:text-forest-300">💬</span>
+                  <span>WhatsApp Fallback Sandbox</span>
+                </h3>
+                <p className="text-[11px] text-earth-500 dark:text-forest-400 mb-4 leading-normal font-medium">
+                  Simulate feature phone SMS/WhatsApp crop doctor diagnosis queries. Send a text like "DIAGNOSE Tomato leaf" along with a photo URL.
+                </p>
+
+                <form onSubmit={handleSendWhatsapp} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Sender Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      value={whatsappFrom}
+                      onChange={(e) => setWhatsappFrom(e.target.value)}
+                      placeholder="e.g. +919876543210"
+                      className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Text Message Body</label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={whatsappBody}
+                      onChange={(e) => setWhatsappBody(e.target.value)}
+                      placeholder="e.g. Tomato leaf dry spots"
+                      className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Simulated Image Attachment URL (Optional)</label>
+                    <input
+                      type="url"
+                      value={whatsappMediaUrl}
+                      onChange={(e) => setWhatsappMediaUrl(e.target.value)}
+                      placeholder="https://example.com/leaf.jpg"
+                      className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-medium"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={whatsappLoading}
+                    className="btn-primary w-full py-2.5 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition active:scale-95 disabled:opacity-50"
+                  >
+                    {whatsappLoading ? 'Processing SMS...' : 'Send WhatsApp Message'}
+                  </button>
+                </form>
+
+                {whatsappResponse && (
+                  <div className="mt-4 p-4 bg-earth-900 dark:bg-black/40 text-green-400 dark:text-green-300 font-mono text-[10px] rounded-xl border border-earth-850 dark:border-forest-900 whitespace-pre-wrap leading-relaxed shadow-inner">
+                    {whatsappResponse}
+                  </div>
+                )}
               </div>
 
               {/* Fair-Price Marketplace (Farmer listing/offers) */}
@@ -1203,6 +1661,95 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                 </div>
               </div>
 
+              {/* Marketplace Price Trend Alerts Setup */}
+              <div className="card-earth">
+                <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2 mb-4">
+                  <TrendingUp className="w-5 h-5 text-forest-500" />
+                  <span>Price Trend Alerts / मूल्य अलर्ट</span>
+                </h3>
+
+                <div className="space-y-4 text-xs">
+                  {/* Create price alert form */}
+                  <form onSubmit={handleCreatePriceAlert} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end bg-earth-50 dark:bg-forest-900/50 p-4 rounded-2xl border border-earth-150 dark:border-forest-800">
+                    <div>
+                      <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Select Crop</label>
+                      <select
+                        value={newAlertCrop}
+                        onChange={(e) => setNewAlertCrop(e.target.value)}
+                        className="w-full bg-white dark:bg-forest-850 border border-earth-200 dark:border-forest-750 rounded-xl py-2 px-3 focus:outline-none dark:text-forest-100 font-semibold"
+                      >
+                        <option value="Tomato">Tomato</option>
+                        <option value="Wheat">Wheat</option>
+                        <option value="Rice">Rice</option>
+                        <option value="Maize">Maize</option>
+                        <option value="Cotton">Cotton</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Condition</label>
+                      <select
+                        value={newAlertCondition}
+                        onChange={(e) => setNewAlertCondition(e.target.value)}
+                        className="w-full bg-white dark:bg-forest-850 border border-earth-200 dark:border-forest-750 rounded-xl py-2 px-3 focus:outline-none dark:text-forest-100 font-semibold"
+                      >
+                        <option value="above">Goes Above (से अधिक)</option>
+                        <option value="below">Goes Below (से कम)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Target Price (₹/kg)</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={newAlertPrice}
+                        onChange={(e) => setNewAlertPrice(e.target.value)}
+                        placeholder="e.g. 25"
+                        className="w-full bg-white dark:bg-forest-850 border border-earth-200 dark:border-forest-750 rounded-xl py-2 px-3 focus:outline-none dark:text-forest-100 font-semibold"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="btn-primary py-2.5 rounded-xl font-bold transition active:scale-95 w-full"
+                    >
+                      Set Alert
+                    </button>
+                  </form>
+
+                  {/* List of active alerts */}
+                  {priceAlerts.length > 0 ? (
+                    <div className="space-y-2">
+                      <strong className="font-bold text-earth-500 uppercase tracking-wider block">Active Price Watchers</strong>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {priceAlerts.map((alert) => (
+                          <div key={alert.id} className="p-3 bg-white dark:bg-forest-900 border border-earth-150 dark:border-forest-850 rounded-xl flex justify-between items-center shadow-sm">
+                            <div>
+                              <strong className="text-earth-900 dark:text-forest-100">{alert.crop}</strong>
+                              <span className="text-[10px] text-earth-455 block capitalize mt-0.5">
+                                Alert if price goes {alert.alert_type} ₹{alert.target_price}/kg
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePriceAlert(alert.id)}
+                              className="text-terracotta-600 hover:text-terracotta-800 font-bold px-2 py-1 hover:bg-terracotta-55 dark:hover:bg-terracotta-900/10 rounded transition"
+                              title="Delete Alert"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-earth-500 italic text-center py-2">No active price alerts set. Use the form above to monitor market rate changes.</p>
+                  )}
+                </div>
+              </div>
+
               {/* Alt-Data Credit Score Panel */}
               {creditData && (
                 <div className="card-earth">
@@ -1231,6 +1778,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                       }`}>
                         {creditData.score >= 75 ? 'Excellent Credit' : creditData.score >= 50 ? 'Moderate Credit' : 'Subprime Credit'}
                       </span>
+                    </div>
+
+                    {/* Active Streak */}
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 rounded-2xl flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2.5">
+                        <span className="text-xl">🔥</span>
+                        <div>
+                          <strong className="font-bold text-earth-850 dark:text-forest-100 block">
+                            {creditData.streak_days > 0 ? `${creditData.streak_days}-Day Activity Streak!` : '0-Day Streak'}
+                          </strong>
+                          <span className="text-[10px] text-earth-500">Log soil telemetry daily to maintain your streak</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full capitalize">
+                        {creditData.streak_days > 0 ? 'Active' : 'Idle'}
+                      </span>
+                    </div>
+
+                    {/* Badge rewards chest */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-earth-500">🏆 Earned Badges & Achievements</h4>
+                      {creditData.badges && creditData.badges.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs animate-fade-in">
+                          {creditData.badges.map((badge: any) => (
+                            <div key={badge.id} className="p-3 bg-white dark:bg-forest-900 border border-earth-150 dark:border-forest-850 rounded-xl flex items-start space-x-3 shadow-sm transition hover:scale-[1.02]">
+                              <span className="text-2xl">{badge.icon}</span>
+                              <div className="leading-tight">
+                                <strong className="font-bold text-earth-900 dark:text-forest-100 block">{badge.name}</strong>
+                                <span className="text-[10px] text-earth-500 block mt-0.5">{badge.desc}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-earth-500 italic text-center py-2">No badges unlocked yet. Register fields and scans to earn rewards!</p>
+                      )}
                     </div>
 
                     {/* Factors list */}
@@ -1518,9 +2101,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
           {/* ========================================================================= */}
           {role === 'finance_officer' && (
             <div className="space-y-6">
-              
-              {/* Farmer underwriting registry */}
-              <div className="card-earth">
+
+              {/* MFO Navigation Tabs */}
+              <div className="flex space-x-1 bg-earth-100 dark:bg-forest-750 p-1 rounded-xl mb-4 border border-earth-200 dark:border-forest-700">
+                <button
+                  type="button"
+                  onClick={() => setMfoView('registry')}
+                  className={`flex-1 text-xs py-2 px-3 rounded-lg font-bold transition flex items-center justify-center space-x-1.5 ${
+                    mfoView === 'registry'
+                      ? 'bg-white text-forest-700 dark:bg-forest-800 dark:text-forest-100 shadow-sm'
+                      : 'text-earth-500 hover:text-earth-800 dark:hover:text-forest-200'
+                  }`}
+                >
+                  <span>📋 Farmer Registry</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMfoView('analytics')}
+                  className={`flex-1 text-xs py-2 px-3 rounded-lg font-bold transition flex items-center justify-center space-x-1.5 ${
+                    mfoView === 'analytics'
+                      ? 'bg-white text-forest-700 dark:bg-forest-800 dark:text-forest-100 shadow-sm'
+                      : 'text-earth-500 hover:text-earth-800 dark:hover:text-forest-200'
+                  }`}
+                >
+                  <span>📊 Portfolio Analytics</span>
+                </button>
+              </div>
+
+              {mfoView === 'registry' && (
+                <>
+                  {/* Farmer underwriting registry */}
+                  <div className="card-earth">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2">
                     <Search className="w-5 h-5 text-forest-500" />
@@ -1596,13 +2207,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
               {/* Individual Farmer Underwriting Credit Report Modal */}
               {selectedFarmerReport && (
                 <div className="fixed inset-0 bg-black/55 z-50 flex items-center justify-center p-4 overflow-y-auto">
-                  <div className="bg-white dark:bg-forest-800 max-w-md w-full border border-earth-200 dark:border-forest-700 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+                  <div className="printable-report bg-white dark:bg-forest-800 max-w-md w-full border border-earth-200 dark:border-forest-700 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
                     <div className="flex justify-between items-start border-b border-earth-150 dark:border-forest-700 pb-3">
                       <div>
                         <span className="text-[10px] text-earth-450 uppercase font-bold">Alt-Data Financial Underwriting</span>
                         <h3 className="text-base font-black text-earth-900 dark:text-forest-100">{selectedFarmerReport.name}</h3>
                       </div>
-                      <button onClick={() => setSelectedFarmerReport(null)} className="text-earth-500 hover:text-earth-700 font-bold text-lg">×</button>
+                      <button onClick={() => setSelectedFarmerReport(null)} className="text-earth-500 hover:text-earth-700 font-bold text-lg no-print">×</button>
                     </div>
 
                     <div className="space-y-4 text-xs">
@@ -1655,24 +2266,284 @@ export const Dashboard: React.FC<DashboardProps> = ({ token, role, userId, apiBa
                         </div>
                       )}
 
-                      {/* Underwriting approval button */}
-                      <button
-                        onClick={() => {
-                          setSuccess(`Approved micro-loan underwriting files for ${selectedFarmerReport.name}!`);
-                          setSelectedFarmerReport(null);
-                        }}
-                        className="btn-primary w-full text-xs py-2 px-3 rounded-lg"
-                      >
-                        Approve Micro-Loan Limit
-                      </button>
+                      {/* Underwriting actions */}
+                      <div className="flex space-x-2 pt-2 no-print">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.print();
+                          }}
+                          className="btn-secondary flex-1 text-xs py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 active:scale-95 transition"
+                        >
+                          <span>🖨️ Export PDF Report</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSuccess(`Approved micro-loan underwriting files for ${selectedFarmerReport.name}!`);
+                            setSelectedFarmerReport(null);
+                          }}
+                          className="btn-primary flex-1 text-xs py-2 px-3 rounded-lg active:scale-95 transition"
+                        >
+                          Approve Loan Limit
+                        </button>
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
+                </>
+              )}
+
+              {/* MFO Portfolio Analytics Hub */}
+              {mfoView === 'analytics' && creditAnalytics && (
+                <div className="space-y-6 animate-fade-in text-xs">
+                  
+                  {/* Regional FarmScore Averages */}
+                  <div className="card-earth">
+                    <h4 className="text-sm font-black text-earth-900 dark:text-forest-100 mb-4 flex items-center space-x-2">
+                      <span>🌍 Regional Average FarmScores</span>
+                    </h4>
+                    <div className="h-56 w-full mt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={creditAnalytics.regional_averages} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                          <XAxis dataKey="region" tick={{ fontSize: 9 }} stroke="currentColor" />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} stroke="currentColor" />
+                          <ChartTooltip contentStyle={{ fontSize: 10, background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                          <Bar dataKey="average_score" fill="#166534" radius={[6, 6, 0, 0]}>
+                            {creditAnalytics.regional_averages.map((_: any, index: number) => (
+                              <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#15803d' : '#22c55e'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Disease Case Distribution */}
+                    <div className="card-earth">
+                      <h4 className="text-sm font-black text-earth-900 dark:text-forest-100 mb-4 flex items-center space-x-2">
+                        <span>🦠 Crop Disease Prevalence</span>
+                      </h4>
+                      <div className="h-56 w-full mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={creditAnalytics.common_diseases} layout="vertical" margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                            <XAxis type="number" tick={{ fontSize: 9 }} stroke="currentColor" />
+                            <YAxis dataKey="disease" type="category" width={80} tick={{ fontSize: 8 }} stroke="currentColor" />
+                            <ChartTooltip contentStyle={{ fontSize: 10, background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                            <Bar dataKey="cases" fill="#b91c1c" radius={[0, 6, 6, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Marketplace volume */}
+                    <div className="card-earth">
+                      <h4 className="text-sm font-black text-earth-900 dark:text-forest-100 mb-4 flex items-center space-x-2">
+                        <span>💰 Marketplace Trade Volume (INR)</span>
+                      </h4>
+                      <div className="h-56 w-full mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={creditAnalytics.transaction_by_crop} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                            <XAxis dataKey="crop" tick={{ fontSize: 9 }} stroke="currentColor" />
+                            <YAxis tick={{ fontSize: 9 }} stroke="currentColor" />
+                            <ChartTooltip contentStyle={{ fontSize: 10, background: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                            <Bar dataKey="volume_inr" fill="#0369a1" radius={[6, 6, 0, 0]}>
+                              {creditAnalytics.transaction_by_crop.map((_: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#0284c7' : '#0ea5e9'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               )}
 
             </div>
           )}
         </>
+      )}
+
+      {!loading && activeTab === 'forum' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Question submission form */}
+          <div className="card-earth">
+            <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center space-x-2 mb-4">
+              <span>❓ Ask the Community</span>
+            </h3>
+
+            <form onSubmit={handleCreateQuestion} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Crop Type</label>
+                  <select
+                    value={newQuestionCrop}
+                    onChange={(e) => setNewQuestionCrop(e.target.value)}
+                    className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-semibold"
+                  >
+                    <option value="Tomato">Tomato</option>
+                    <option value="Wheat">Wheat</option>
+                    <option value="Rice">Rice</option>
+                    <option value="Maize">Maize</option>
+                    <option value="Cotton">Cotton</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Your Region</label>
+                  <input
+                    type="text"
+                    required
+                    value={newQuestionRegion}
+                    onChange={(e) => setNewQuestionRegion(e.target.value)}
+                    placeholder="e.g. Rajasthan"
+                    className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-earth-700 dark:text-forest-300 mb-1">Your Question / आपका प्रश्न</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={newQuestionText}
+                  onChange={(e) => setNewQuestionText(e.target.value)}
+                  placeholder="Describe your query in detail..."
+                  className="w-full bg-earth-50 dark:bg-forest-900 border border-earth-200 dark:border-forest-700 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-forest-500 dark:text-forest-100 font-medium"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn-primary w-full py-2.5 rounded-xl font-bold transition active:scale-95"
+              >
+                Post Question
+              </button>
+            </form>
+          </div>
+
+          {/* Forum Q&A Feed */}
+          <div className="card-earth">
+            <h3 className="text-base font-black text-earth-900 dark:text-forest-100 flex items-center justify-between mb-4">
+              <span>💬 Community Discussions</span>
+              {forumQuestions.length > 0 && (
+                <span className="text-[10px] bg-forest-100 dark:bg-forest-900 text-forest-750 dark:text-forest-300 font-black px-2 py-0.5 rounded-full">
+                  {forumQuestions.length} Threads
+                </span>
+              )}
+            </h3>
+
+            {/* Filter bar */}
+            <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-earth-50 dark:bg-forest-900/50 rounded-xl border border-earth-150 dark:border-forest-800 text-xs">
+              <div>
+                <label className="block font-bold text-earth-750 dark:text-forest-300 mb-1">Filter Crop</label>
+                <input
+                  type="text"
+                  value={forumCropFilter}
+                  onChange={(e) => setForumCropFilter(e.target.value)}
+                  placeholder="e.g. Tomato"
+                  className="w-full bg-white dark:bg-forest-850 border border-earth-200 dark:border-forest-750 rounded-lg py-1.5 px-2.5 focus:outline-none dark:text-forest-100 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-earth-750 dark:text-forest-300 mb-1">Filter Region</label>
+                <input
+                  type="text"
+                  value={forumRegionFilter}
+                  onChange={(e) => setForumRegionFilter(e.target.value)}
+                  placeholder="e.g. Rajasthan"
+                  className="w-full bg-white dark:bg-forest-850 border border-earth-200 dark:border-forest-750 rounded-lg py-1.5 px-2.5 focus:outline-none dark:text-forest-100 font-medium"
+                />
+              </div>
+            </div>
+
+            {forumLoading ? (
+              <ListSkeleton />
+            ) : forumQuestions.length > 0 ? (
+              <div className="space-y-4">
+                {forumQuestions.map((q) => (
+                  <div key={q.id} className="p-4 bg-earth-50/50 dark:bg-forest-900/30 border border-earth-150 dark:border-forest-850 rounded-2xl space-y-3">
+                    <div className="flex justify-between items-start text-[10px] text-earth-450 dark:text-forest-400">
+                      <div>
+                        <strong className="font-bold text-earth-850 dark:text-forest-100">{q.user_name}</strong>
+                        <span className="ml-1 capitalize">({q.user_role})</span>
+                      </div>
+                      <span className="font-mono text-[9px]">{new Date(q.created_at).toLocaleDateString()}</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex space-x-1.5 items-center">
+                        <span className="bg-forest-100 dark:bg-forest-900 text-forest-750 dark:text-forest-300 font-bold text-[9px] px-1.5 py-0.5 rounded capitalize">
+                          {q.crop_type}
+                        </span>
+                        <span className="bg-earth-200 dark:bg-forest-800 text-earth-650 dark:text-forest-200 font-bold text-[9px] px-1.5 py-0.5 rounded">
+                          📍 {q.region}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-earth-900 dark:text-forest-100 leading-normal">
+                        {q.question_text}
+                      </p>
+                    </div>
+
+                    {/* Answers block */}
+                    <div className="space-y-2.5 border-t border-earth-200/50 dark:border-forest-800 pt-3">
+                      {q.answers.length > 0 && (
+                        <div className="space-y-2">
+                          {q.answers.map((a: any) => (
+                            <div key={a.id} className="p-2.5 bg-white dark:bg-forest-900 border border-earth-100 dark:border-forest-850 rounded-xl space-y-1 text-xs">
+                              <div className="flex justify-between items-center text-[9px] text-earth-450">
+                                <div>
+                                  <strong className={`font-bold ${a.is_extension_officer ? 'text-forest-600 dark:text-forest-300' : 'text-earth-750 dark:text-forest-200'}`}>
+                                    {a.user_name}
+                                  </strong>
+                                  <span className="ml-1 capitalize">({a.user_role})</span>
+                                  {a.is_extension_officer === 1 && (
+                                    <span className="ml-1.5 bg-forest-600 text-white text-[8px] font-black px-1 py-0.25 rounded-md">
+                                      OFFICER
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono text-[8px]">{new Date(a.created_at).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-earth-800 dark:text-forest-100 leading-normal">{a.answer_text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add answer input */}
+                      <div className="flex items-center space-x-2 pt-1">
+                        <input
+                          type="text"
+                          value={newAnswerTexts[q.id] || ''}
+                          onChange={(e) => setNewAnswerTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                          placeholder="Write a response... / जवाब लिखें..."
+                          className="flex-1 bg-white dark:bg-forest-900 border border-earth-200 dark:border-forest-750 rounded-xl py-1.5 px-3 focus:outline-none text-xs dark:text-forest-100 font-medium shadow-inner"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSubmitAnswer(q.id)}
+                          className="btn-primary text-xs py-1.5 px-3.5 rounded-xl font-bold transition active:scale-95"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-earth-500 italic text-center py-6">No matching questions found.</p>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Onboarding Tour Overlay Modal */}

@@ -202,3 +202,60 @@ class CreditScoreResponse(BaseModel):
     class Config:
         orm_mode = True
         from_attributes = True
+
+# --- FORUM SCHEMAS ---
+class ForumAnswerCreate(BaseModel):
+    answer_text: str = PyField(..., min_length=2, max_length=1000, description="Answer must be between 2 and 1000 characters")
+
+class ForumAnswerResponse(BaseModel):
+    id: int
+    question_id: int
+    user_id: int
+    user_name: str
+    user_role: str
+    answer_text: str
+    is_extension_officer: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class ForumQuestionCreate(BaseModel):
+    crop_type: str = PyField(..., min_length=2, max_length=30, description="Crop name must be between 2 and 30 characters")
+    region: str = PyField(..., min_length=2, max_length=50, description="Region must be between 2 and 50 characters")
+    question_text: str = PyField(..., min_length=5, max_length=1000, description="Question must be between 5 and 1000 characters")
+
+class ForumQuestionResponse(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    user_role: str
+    crop_type: str
+    region: str
+    question_text: str
+    created_at: datetime
+    answers: List[ForumAnswerResponse] = []
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+# --- PRICE ALERT SCHEMAS ---
+class PriceAlertCreate(BaseModel):
+    crop: str = PyField(..., min_length=2, max_length=30, description="Crop name must be between 2 and 30 characters")
+    target_price: float = PyField(..., gt=0.0, description="Target price must be positive")
+    alert_type: str = PyField(..., description="Alert type must be 'above' or 'below'")
+
+class PriceAlertResponse(BaseModel):
+    id: int
+    user_id: int
+    crop: str
+    target_price: float
+    alert_type: str
+    is_active: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+        from_attributes = True

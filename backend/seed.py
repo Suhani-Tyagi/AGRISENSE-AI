@@ -2,7 +2,7 @@ import datetime
 import random
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal, engine, Base
-from backend.models import User, Field, SensorReading, Diagnosis, MarketListing, Offer, Transaction, CreditScore
+from backend.models import User, Field, SensorReading, Diagnosis, MarketListing, Offer, Transaction, CreditScore, ForumQuestion, ForumAnswer
 from backend.auth import hash_password
 from backend.simulator import generate_history_for_field
 from backend.credit_engine import update_db_credit_score
@@ -353,6 +353,61 @@ def seed_db():
     print("Computing baseline credit scores for all farmers...")
     for farmer in farmers:
         update_db_credit_score(db, farmer.id)
+
+    # Seed forum posts
+    print("Seeding Community Q&A forum...")
+    db.query(ForumAnswer).delete()
+    db.query(ForumQuestion).delete()
+    db.commit()
+
+    farmer1 = db.query(User).filter(User.role == "farmer").first()
+    farmer2 = db.query(User).filter(User.role == "farmer").offset(1).first()
+    officer = db.query(User).filter(User.role == "finance_officer").first()
+
+    if farmer1 and farmer2 and officer:
+        q1 = ForumQuestion(
+            user_id=farmer1.id,
+            crop_type="Tomato",
+            region="Rajasthan",
+            question_text="Yellow spots on tomato leaves. Organic solution?"
+        )
+        db.add(q1)
+        db.commit()
+        db.refresh(q1)
+
+        a1_1 = ForumAnswer(
+            question_id=q1.id,
+            user_id=farmer2.id,
+            answer_text="Try spraying diluted sour buttermilk or neem oil. It worked for my tomato mold.",
+            is_extension_officer=0
+        )
+        a1_2 = ForumAnswer(
+            question_id=q1.id,
+            user_id=officer.id,
+            answer_text="This is likely early leaf mold. Ensure you prune lower leaves for ventilation.",
+            is_extension_officer=1
+        )
+        db.add(a1_1)
+        db.add(a1_2)
+
+        q2 = ForumQuestion(
+            user_id=farmer2.id,
+            crop_type="Wheat",
+            region="Punjab",
+            question_text="When is the best spraying window for leaf rust this week?"
+        )
+        db.add(q2)
+        db.commit()
+        db.refresh(q2)
+
+        a2_1 = ForumAnswer(
+            question_id=q2.id,
+            user_id=officer.id,
+            answer_text="Check the AgriSense climate advisory! Keep wind speed below 15 km/h for spraying fungicide.",
+            is_extension_officer=1
+        )
+        db.add(a2_1)
+        db.commit()
 
     db.close()
     print("Database seeding completed successfully!")

@@ -55,3 +55,28 @@
 .voice-bar:nth-child(4) { animation-delay: 0.3s; }
 .voice-bar:nth-child(5) { animation-delay: 0.4s; }
 .voice-bar:nth-child(6) { animation-delay: 0.5s; }
+
+/* Print Styles for PDF Credit Memo */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-report, .printable-report * {
+    visibility: visible;
+  }
+  .printable-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 24px;
+    background: white !important;
+    color: black !important;
+    font-family: sans-serif;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

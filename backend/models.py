@@ -138,3 +138,45 @@ class CreditScore(Base):
 
     # Relationships
     user = relationship("User", back_populates="credit_score")
+
+class ForumQuestion(Base):
+    __tablename__ = "forum_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    crop_type = Column(String, nullable=False)
+    region = Column(String, nullable=False)
+    question_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+    answers = relationship("ForumAnswer", back_populates="question", cascade="all, delete-orphan")
+
+class ForumAnswer(Base):
+    __tablename__ = "forum_answers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_id = Column(Integer, ForeignKey("forum_questions.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    answer_text = Column(Text, nullable=False)
+    is_extension_officer = Column(Integer, default=0) # 0 for false, 1 for true
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+    question = relationship("ForumQuestion", back_populates="answers")
+
+class PriceAlert(Base):
+    __tablename__ = "price_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    crop = Column(String, nullable=False)
+    target_price = Column(Float, nullable=False)
+    alert_type = Column(String, nullable=False) # "above" or "below"
+    is_active = Column(Integer, default=1)      # 1 for active, 0 for inactive
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")

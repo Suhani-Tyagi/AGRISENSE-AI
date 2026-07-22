@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
-from ..models import User, Field, SensorReading
+from ..models import User, Field, SensorReading, Diagnosis
 from ..schemas import FieldCreate, FieldResponse, SensorReadingResponse
 from ..auth import get_current_user
 from ..credit_engine import update_db_credit_score
@@ -237,4 +237,103 @@ def get_recommendations(field_id: int, current_user: User = Depends(get_current_
             "ph": last_reading.ph,
             "timestamp": last_reading.timestamp
         }
+    }
+
+@router.get("/{field_id}/yield-prediction")
+def get_yield_prediction(field_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "farmer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only farmers can access yield predictions"
+        )
+    
+    field = db.query(Field).filter(Field.id == field_id, Field.user_id == current_user.id).first()
+    if not field:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Field not found"
+        )
+
+    # 1. Crop baseline yields per acre (in kg) & prices per kg (in INR)
+    crop_baselines = {
+        "Tomato": {"yield_per_acre": 12000.0, "price": 25.0},
+        "Wheat": {"yield_per_acre": 1800.0, "price": 22.0},
+        "Rice": {"yield_per_acre": 2200.0, "price": 26.0},
+        "Maize": {"yield_per_acre": 2500.0, "price": 20.0},
+        "Cotton": {"yield_per_acre": 1000.0, "price": 60.0}
+    }
+    
+    crop_info = crop_baselines.get(field.crop_type, {"yield_per_acre": 1500.0, "price": 25.0})
+    base_yield = crop_info["yield_per_acre"] * field.size_acres
+    
+    # 2. Factor adjustments
+    factors = []
+    reduction_percentage = 0.0
+    
+    # Soil moisture check
+    readings = db.query(SensorReading).filter(SensorReading.field_id == field.id).order_by(SensorReading.timestamp.desc()).limit(5).all()
+    if readings:
+        avg_moisture = sum(r.soil_moisture for r in readings) / len(readings)
+        if avg_moisture < 35.0:
+            reduction_percentage += 15.0
+            factors.append("Low soil moisture levels (-15% yield potential)")
+        elif avg_moisture > 75.0:
+            reduction_percentage += 10.0
+            factors.append("Waterlogged soil conditions (-10% yield potential)")
+        else:
+            factors.append("Optimal soil moisture levels (+0% yield adjustments)")
+            
+        # NPK check
+        last_r = readings[0]
+        baseline = get_crop_baseline(field.crop_type)
+        npk_deficient = 0
+        if last_r.nitrogen < baseline["N"] * 0.7: npk_deficient += 1
+        if last_r.phosphorus < baseline["P"] * 0.7: npk_deficient += 1
+        if last_r.potassium < baseline["K"] * 0.7: npk_deficient += 1
+        
+        if npk_deficient > 0:
+            npk_penalty = npk_deficient * 8.0
+            reduction_percentage += npk_penalty
+            factors.append(f"Soil nutrient (NPK) deficiencies detected (-{npk_penalty}% yield potential)")
+        else:
+            factors.append("Balanced soil nutrients (+5% expected yield)")
+    else:
+        reduction_percentage += 10.0
+        factors.append("Missing sensor telemetry logs (Default -10% yield potential)")
+
+    # 3. Diagnosis / disease history check
+    user_diagnoses = db.query(Diagnosis).filter(Diagnosis.user_id == current_user.id).all()
+    # Filter diagnoses that match this crop type in the last 60 days
+    crop_diagnoses = [d for d in user_diagnoses if d.crop_type.lower() == field.crop_type.lower()]
+    if crop_diagnoses:
+        disease_penalty = min(len(crop_diagnoses) * 12.0, 45.0)
+        reduction_percentage += disease_penalty
+        factors.append(f"Historical crop doctor pest/disease logs (-{disease_penalty}% yield potential)")
+    else:
+        factors.append("Zero crop doctor disease reports (+10% expected yield)")
+
+    # 4. Compute final output values
+    multiplier = max(1.0 - (reduction_percentage / 100.0), 0.4)
+    predicted_yield = base_yield * multiplier
+    
+    min_yield = predicted_yield * 0.9
+    max_yield = predicted_yield * 1.1
+    
+    est_price = crop_info["price"]
+    min_revenue = min_yield * est_price
+    max_revenue = max_yield * est_price
+    
+    confidence = "High" if len(readings) >= 5 else "Medium" if len(readings) > 0 else "Low"
+
+    return {
+        "crop_type": field.crop_type,
+        "size_acres": field.size_acres,
+        "base_yield_kg": round(base_yield, 1),
+        "predicted_yield_kg": round(predicted_yield, 1),
+        "min_yield_kg": round(min_yield, 1),
+        "max_yield_kg": round(max_yield, 1),
+        "min_revenue_inr": round(min_revenue, 1),
+        "max_revenue_inr": round(max_revenue, 1),
+        "confidence_rating": confidence,
+        "breakdown_factors": factors
     }

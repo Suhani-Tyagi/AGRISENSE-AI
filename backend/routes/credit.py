@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
-from ..models import User, CreditScore, Field, Transaction
+from ..models import User, CreditScore, Field, Transaction, Diagnosis, SensorReading
 from ..auth import get_current_user
 from ..credit_engine import calculate_farm_score, update_db_credit_score
+import datetime
 
 router = APIRouter(prefix="/credit", tags=["credit"])
 
@@ -112,6 +113,75 @@ def get_user_score(current_user: User = Depends(get_current_user), db: Session =
     db_score = update_db_credit_score(db, current_user.id)
     score_details = calculate_farm_score(db, current_user.id)
     
+    # 1. Calculate active telemetry logging streak
+    fields = db.query(Field).filter(Field.user_id == current_user.id).all()
+    field_ids = [f.id for f in fields]
+    
+    streak = 0
+    if field_ids:
+        readings = db.query(SensorReading).filter(SensorReading.field_id.in_(field_ids)).order_by(SensorReading.timestamp.desc()).all()
+        readings_days = sorted(list(set(r.timestamp.date() for r in readings)), reverse=True)
+        
+        if readings_days:
+            today = datetime.date.today()
+            yesterday = today - datetime.timedelta(days=1)
+            
+            if readings_days[0] in [today, yesterday]:
+                streak = 1
+                current_date = readings_days[0]
+                for day in readings_days[1:]:
+                    if day == current_date - datetime.timedelta(days=1):
+                        streak += 1
+                        current_date = day
+                    elif day == current_date:
+                        continue
+                    else:
+                        break
+
+    # 2. Resolve badge rewards
+    badges = []
+    if len(fields) >= 1:
+        badges.append({
+            "id": "badge_pioneer",
+            "name": "Bhoomi Putra (Pioneer)",
+            "name_hi": "भूमि पुत्र",
+            "icon": "🌱",
+            "desc": "Registered 1 or more farmlands with active telemetry.",
+            "desc_hi": "सक्रिय टेलीमेट्री के साथ 1 या अधिक कृषि भूमि पंजीकृत की।"
+        })
+        
+    diagnoses = db.query(Diagnosis).filter(Diagnosis.user_id == current_user.id).all()
+    if len(diagnoses) >= 2:
+        badges.append({
+            "id": "badge_sprout",
+            "name": "Dr. Sprout (Pest Doctor)",
+            "name_hi": "पौध चिकित्सक",
+            "icon": "🩺",
+            "desc": "Conducted 2 or more Crop Doctor leaf scans.",
+            "desc_hi": "2 या अधिक फसल चिकित्सक पत्ती स्कैन का आयोजन किया।"
+        })
+        
+    transactions = db.query(Transaction).filter(Transaction.seller_id == current_user.id).all()
+    if len(transactions) >= 1:
+        badges.append({
+            "id": "badge_trade",
+            "name": "Trade Guru (Market Leader)",
+            "name_hi": "व्यापार गुरु",
+            "icon": "🏆",
+            "desc": "Successfully completed a crop sale in fair marketplace.",
+            "desc_hi": "उचित बाजार में सफलतापूर्वक एक फसल की बिक्री पूरी की।"
+        })
+        
+    if db_score.score >= 75:
+        badges.append({
+            "id": "badge_credit",
+            "name": "Credit Champion (High Score)",
+            "name_hi": "ऋण विजेता",
+            "icon": "⭐",
+            "desc": "Earned a premium FarmScore rating above 75.",
+            "desc_hi": "75 से ऊपर एक प्रीमियम फार्मस्कोर रेटिंग अर्जित की।"
+        })
+
     # Add loan offers
     offers = get_loan_offers(db_score.score)
     
@@ -128,7 +198,9 @@ def get_user_score(current_user: User = Depends(get_current_user), db: Session =
             "repayment": db_score.repayment_factor
         },
         "tips": score_details["tips"],
-        "loan_offers": offers
+        "loan_offers": offers,
+        "streak_days": streak,
+        "badges": badges
     }
 
 @router.get("/farmers")
@@ -169,3 +241,96 @@ def search_farmers_credit(current_user: User = Depends(get_current_user), db: Se
         })
         
     return results
+
+@router.get("/analytics")
+def get_portfolio_analytics(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "finance_officer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access restricted to authorized micro-finance officers only"
+        )
+        
+    # 1. Regional average FarmScores
+    farmers = db.query(User).filter(User.role == "farmer").all()
+    regions_scores = {
+        "North Zone (Punjab/Haryana)": [],
+        "West Zone (Rajasthan)": [],
+        "Central Zone (Madhya Pradesh)": [],
+        "South Zone": []
+    }
+    
+    for f in farmers:
+        db_score = db.query(CreditScore).filter(CreditScore.user_id == f.id).first()
+        score_val = db_score.score if db_score else 50
+        
+        # Check first field of farmer to locate region
+        first_field = db.query(Field).filter(Field.user_id == f.id).first()
+        if first_field:
+            lat, lng = first_field.latitude, first_field.longitude
+            if 28.0 <= lat <= 32.0 and 74.0 <= lng <= 78.0:
+                regions_scores["North Zone (Punjab/Haryana)"].append(score_val)
+            elif 25.0 <= lat <= 28.0 and 72.0 <= lng <= 78.0:
+                regions_scores["West Zone (Rajasthan)"].append(score_val)
+            elif 20.0 <= lat <= 25.0 and 75.0 <= lng <= 82.0:
+                regions_scores["Central Zone (Madhya Pradesh)"].append(score_val)
+            else:
+                regions_scores["South Zone"].append(score_val)
+        else:
+            regions_scores["West Zone (Rajasthan)"].append(score_val) # Default fallback
+
+    regional_averages = []
+    for r, scores in regions_scores.items():
+        avg = sum(scores) / len(scores) if scores else 60.0
+        regional_averages.append({
+            "region": r,
+            "average_score": round(avg, 1),
+            "farmer_count": len(scores)
+        })
+
+    # 2. Most common crop diseases this season
+    diagnoses = db.query(Diagnosis).all()
+    disease_counts = {}
+    for d in diagnoses:
+        name = d.disease_name.split("(")[0].strip() # Clean name
+        disease_counts[name] = disease_counts.get(name, 0) + 1
+        
+    common_diseases = []
+    for name, cnt in sorted(disease_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+        common_diseases.append({
+            "disease": name,
+            "cases": cnt
+        })
+    # If empty, add mock defaults
+    if not common_diseases:
+        common_diseases = [
+            {"disease": "Tomato Late Blight", "cases": 8},
+            {"disease": "Wheat Leaf Rust", "cases": 5},
+            {"disease": "Rice Blast", "cases": 4}
+        ]
+
+    # 3. Marketplace transaction volume (by crop)
+    transactions = db.query(Transaction).all()
+    crop_volumes = {}
+    for t in transactions:
+        crop = t.listing.crop if (t.listing and t.listing.crop) else "Tomato"
+        val = t.final_price * t.quantity_kg
+        crop_volumes[crop] = crop_volumes.get(crop, 0.0) + val
+        
+    transaction_by_crop = []
+    for crop, vol in crop_volumes.items():
+        transaction_by_crop.append({
+            "crop": crop,
+            "volume_inr": round(vol, 2)
+        })
+    if not transaction_by_crop:
+        transaction_by_crop = [
+            {"crop": "Tomato", "volume_inr": 25000.0},
+            {"crop": "Wheat", "volume_inr": 18000.0},
+            {"crop": "Rice", "volume_inr": 35000.0}
+        ]
+
+    return {
+        "regional_averages": regional_averages,
+        "common_diseases": common_diseases,
+        "transaction_by_crop": transaction_by_crop
+    }
